@@ -149,11 +149,20 @@ lasso$nzero[lasso$lambda == lasso$lambda.1se]
 
 ```{r}
 # Ridge model
-ridge_min <- glmnet()
+ridge_min <- glmnet(
+  x = X,
+  y = Y,
+  alpha = 0,
+  lambda = ridge$lambda.min
+)
 
 # Lasso model
-lasso_min <- glmnet()
-
+lasso_min <- glmnet(
+  x = X,
+  y = Y,
+  alpha = 1,
+  lambda = lasso$lambda.min
+)
 
 par(mfrow = c(1, 2))
 # plot ridge model

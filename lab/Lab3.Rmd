@@ -83,14 +83,14 @@ In lecture we learned about two methods of estimating our model's generalization
 
 -   ***Question 4***. This time fit a ridge regression model and a lasso model, both with using cross validation. The glmnet package kindly provides a cv.glmnet() function to do this (similar to the glmnet() function that we just used). Use the alpha argument to control which type of model you are running. Plot the results.
 ```{r}
-# Apply CV ridge regression to Ames data.  Same arguments as before to glmnet()
+# apply cross-validation ridge regression to data
 ridge <- cv.glmnet(
   x = X,
   y = Y,
   alpha = 0
 )
 
-# Apply CV lasso regression to Ames data
+# apply cross-validation lasso regression to data
 lasso <- cv.glmnet(
   x = X,
   y = Y,
@@ -106,12 +106,73 @@ plot(lasso, main = "Lasso penalty\n\n")
 
 -   ***Question 5***. Interpret the graphs. What is being displayed on the axes here? How does the performance of the models change with the value of lambda?
 
+[On both graphs, log(lambda) is plotted on the x-axis and mean-squared error is on the y-axis. When we apply a ridge penalty to the abalones data, we find that the model performs best when log(lambda) is between -2 and -1. In general, the rate at which mean-squared error increases is mostly constant from log(lambda) values -2 to 2, is then increasing from 2 to 4, and finally decreasing from 4 to 8. In addition, when we apply the ridge penalty, we keep all 10 variables in our model at all log(lambda values). Conversely, when we apply a lasso penalty to the abalones data, the number of variables being included in our model decreases as log(lambda) increases. When apply the lasso penalty, we find that the model performs best when log(lambda) is between about -7 to -3. During this range where the model is performing best, our lasso penalty is generally including 9 variables in the model, but it is hard to tell how many variables it is including at the high end of the range (may be as few as 6 variables). Overall, the mean-squared error only increases slightly over the log(lambda) values -8 to -3 and then increases exponentially from -3 to -1.5. Finally, the exponential growth in mean-squared error resets at -1.5, continuing until 1.]{style="color:navy;"}
+
 -   ***Question 6***. Inspect the ridge model object you created with cv.glmnet(). The \$cvm column shows the MSEs for each CV fold. What is the minimum MSE? What is the value of lambda associated with this MSE minimum?
 
+```{r}
+# minimum MSE of ridge model
+min(ridge$cvm)
+
+# lambda value at minimum MSE of ridge model
+ridge$lambda.min
+```
+
+[The minimum MSE of the ridge model is 5.02 rings squared, which is associated with a lambda value of 0.200.]{style="color:navy;"}
+
 -   ***Question 7***. Do the same for the lasso model. What is the minimum MSE? What is the value of lambda associated with this MSE minimum?
+```{r}
+# minimum MSE of lasso model
+min(lasso$cvm)
+
+# lambda value at minimum MSE of lasso model
+lasso$lambda.min
+```
+
+[The minimum MSE of the ridge model is 4.72 rings squared, which is associated with a lambda value of 0.001.]{style="color:navy;"}
 
 Data scientists often use the "one-standard-error" rule when tuning lambda to select the best model. This rule tells us to pick the most parsimonious model (fewest number of predictors) while still remaining within one standard error of the overall minimum cross validation error. The cv.glmnet() model object has a column that automatically finds the value of lambda associated with the model that produces an MSE that is one standard error from the MSE minimum (\$lambda.1se).
 
 -   ***Question 8.*** Find the number of predictors associated with this model (hint: the \$nzero is the \# of predictors column).
 
+```{r}
+# number of predictors when applying lasso penalty and 1-SE rule
+lasso$nzero[lasso$lambda == lasso$lambda.1se]
+```
+
+[When applying a lasso penalty and the one-standard-error rule, our resulting model has 6 predictor variables.]{style="color:navy;"}
+
 -   ***Question 9*****.** Which regularized regression worked better for this task, ridge or lasso? Explain your answer.
+
+```{r}
+# ridge model using 1-SE rule
+ridge_1se <- glmnet(
+  x = X,
+  y = Y,
+  alpha = 0,
+  lambda = ridge$lambda.1se
+)
+
+# lasso model using 1-SE rule
+lasso_1se <- glmnet(
+  x = X,
+  y = Y,
+  alpha = 1,
+  lambda = lasso$lambda.1se
+)
+
+# format code output
+par(mfrow = c(1, 2))
+
+# plot ridge model
+plot(ridge_1se, xvar = "lambda", main = "Ridge penalty\n\n")
+abline(v = log(ridge$lambda.min), col = "red", lty = "dashed")
+abline(v = log(ridge$lambda.1se), col = "blue", lty = "dashed")
+
+# plot lasso model
+plot(lasso_1se, xvar = "lambda", main = "Lasso penalty\n\n")
+abline(v = log(lasso$lambda.min), col = "red", lty = "dashed")
+abline(v = log(lasso$lambda.1se), col = "blue", lty = "dashed")
+```
+
+Why is number of predictors inconsistant with previous graph?
