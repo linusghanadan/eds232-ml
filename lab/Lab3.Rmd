@@ -175,4 +175,4 @@ abline(v = log(lasso$lambda.min), col = "red", lty = "dashed")
 abline(v = log(lasso$lambda.1se), col = "blue", lty = "dashed")
 ```
 
-Why is number of predictors inconsistant with previous graph?
+[The ridge regression appears to have worked better because the minimum and maximum log(lambda) values, compared to the lasso regression, are both much closer to one another. This means that if we proceed with the ridge regression model, there will be much less variance in the model's coefficients depending on which specific lambda value we choose.]{style="color:navy;"}
