@@ -1,8 +1,7 @@
 ---
 title: "Ghanadan_Lab3"
 author: "Linus Ghanadan"
-date: 
-output: 
+date: "01-31-2024"
 ---
 
 ```{r setup, include=FALSE}
@@ -144,6 +143,7 @@ lasso$nzero[lasso$lambda == lasso$lambda.1se]
 
 -   ***Question 9*****.** Which regularized regression worked better for this task, ridge or lasso? Explain your answer.
 
+
 ```{r}
 # ridge model using 1-SE rule
 ridge_1se <- glmnet(
@@ -165,14 +165,14 @@ lasso_1se <- glmnet(
 par(mfrow = c(1, 2))
 
 # plot ridge model
-plot(ridge_1se, xvar = "lambda", main = "Ridge penalty\n\n")
+plot(ridge_1se, xvar = "lambda", main = "Ridge penalty\n\n") # not sure why the coefficient plots do not show up like they did in graph from question 3
 abline(v = log(ridge$lambda.min), col = "red", lty = "dashed")
 abline(v = log(ridge$lambda.1se), col = "blue", lty = "dashed")
 
 # plot lasso model
-plot(lasso_1se, xvar = "lambda", main = "Lasso penalty\n\n")
+plot(lasso_1se, xvar = "lambda", main = "Lasso penalty\n\n") # not sure why the coefficient plots do not show up like they did in graph from question 3
 abline(v = log(lasso$lambda.min), col = "red", lty = "dashed")
 abline(v = log(lasso$lambda.1se), col = "blue", lty = "dashed")
 ```
 
-[The ridge regression appears to have worked better because the minimum and maximum log(lambda) values, compared to the lasso regression, are both much closer to one another. This means that if we proceed with the ridge regression model, there will be much less variance in the model's coefficients depending on which specific lambda value we choose.]{style="color:navy;"}
+[The lasso regression appears to be better for this task because it outperformed the ridge regression during k-fold cross validation. When applied to the validation data, the ridge regression generates a minimum mean squared error of about 5. Meanwhile, the mean squared error resulting from the lasso regression stays under 5 at its minimum and all the way up to the first standard error mark. This can be seen in the graph that we plotted in question 4. In addition, the lasso regression achieves this with fewer predictor variables than the ridge regression, further supporting the idea that it is better to use for this task.]{style="color:navy;"}
