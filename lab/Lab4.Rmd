@@ -1,0 +1,183 @@
+---
+title: "Ghanadan_Lab4"
+author: "Linus Ghanadan"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(skimr)
+library(tidymodels)
+library(caret)
+library(corrplot)
+```
+
+## Lab 4: Fire and Tree Mortality
+
+The database we'll be working with today includes 36066 observations of individual trees involved in prescribed fires and wildfires occurring over 35 years, from 1981 to 2016. It is a subset of a larger fire and tree mortality database from the US Forest Service (see data description for the full database here: [link](https://www.nature.com/articles/s41597-020-0522-7#Sec10)). Our goal today is to predict the likelihood of tree mortality after a fire.
+
+### Data Exploration
+
+Outcome variable: *yr1status* = tree status (0=alive, 1=dead) assessed one year post-fire.
+
+Predictors: *YrFireName, Species, Genus_species, DBH_cm, CVS_percent, BCHM_m, BTL* (Information on these variables available in the database metadata ([link](https://www.fs.usda.gov/rds/archive/products/RDS-2020-0001-2/_metadata_RDS-2020-0001-2.html))).
+
+```{r}
+trees_dat <- read_csv(file = "https://raw.githubusercontent.com/MaRo406/eds-232-machine-learning/main/data/trees-dat.csv")
+```
+
+> Question 1: Recode all the predictors to a zero_based integer form
+
+```{r}
+# specify a recipe
+trees_recipe <- trees_dat %>% 
+  recipe(yr1status ~ .) %>%
+  step_integer(all_string_predictors(), zero_based = TRUE) %>% 
+  prep()
+```
+
+
+### Data Splitting
+
+> Question 2: Create trees_training (70%) and trees_test (30%) splits for the modeling
+
+```{r}
+# create training (70%) and test (30%) sets for the trees data
+set.seed(123)  # for reproducibility 
+trees_split <- initial_split(trees_dat, prop = .70)
+trees_train <- training(trees_split)
+trees_test  <- testing(trees_split)
+```
+
+> Question 3: How many observations are we using for training with this split?
+
+```{r}
+nrow(trees_train)
+```
+
+[There are 25246 observations in our training data.]{style="color:navy;"}
+
+### Simple Logistic Regression 
+
+Let's start our modeling effort with some simple models: one predictor and one outcome each.
+
+> Question 4: Choose the three predictors that most highly correlate with our outcome variable for further investigation.
+
+```{r}
+# bake recipe with training data
+trees_baked_train <- bake(trees_recipe, new_data = trees_train)
+```
+
+
+```{r}
+# Obtain correlation matrix
+corr_mat <- cor(trees_baked_train)
+
+# Make a correlation plot between the variables
+corrplot(corr_mat, method = "shade", shade.col = NA, tl.col = "black", tl.srt = 45, addCoef.col = "black", cl.pos = "n", order = "original")
+```
+
+[The three variables most correlated with *yr1status* are *CVS_percent* (0.68), *BCHM_m* (0.42), and *DBH_cm* (-0.3).]{style="color:navy;"}
+
+> Question 5: Use glm() to fit three simple logistic regression models, one for each of the predictors you identified.
+
+```{r}
+# Build model for CVS_percent
+model_cvs <- glm(data = trees_baked_train, yr1status ~ CVS_percent, family = "binomial")
+  
+# Build model for BCHM_m
+model_bchm <- glm(data = trees_baked_train, yr1status ~ BCHM_m, family = "binomial")
+
+# Build model for DBH_cm
+model_dbh <- glm(data = trees_baked_train, yr1status ~ DBH_cm, family = "binomial")
+
+# tidy models
+tidy(model_cvs)
+tidy(model_bchm)
+tidy(model_dbh)
+
+# exponentiate the coefficients from model objects for interpretation., giving changes in odds of tree being dead one year after fire
+exp(coef(model_cvs))
+exp(coef(model_bchm))
+exp(coef(model_dbh))
+
+```
+
+
+### Interpret the Coefficients 
+
+We aren't always interested in or able to interpret the model coefficients in a machine learning task. Often predictive accuracy is all we care about.
+
+> Question 6: That said, take a stab at interpreting our model coefficients now.
+
+[The odds of a tree being dead one year after a fire multiply 1.08-fold for every 1 additional percent of crown volume that was scorched.]{style="color:navy;"}
+
+[The odds of a tree being dead one year after a fire multiply 1.235-fold for every 1 additional meter of vertical height with maximum bark char.]{style="color:navy;"}
+
+[The odds of a tree being dead one year after a fire multiply 0.94-fold for every 1 additional centimeter in diameter at breast height.]{style="color:navy;"}
+
+> Question 7: Now let's visualize the results from these models. Plot the fit to the training data of each model.
+
+```{r}
+# Plot CVS model with training data
+ggplot(trees_baked_train, aes(x = CVS_percent, y = yr1status)) +
+  geom_point() +
+  stat_smooth(method = "glm", se = TRUE, method.arguments = list(family = "binomial"))
+```
+
+```{r}
+# Plot BCHM model with training data
+ggplot(trees_baked_train, aes(x = BCHM_m, y = yr1status)) +
+  geom_point() +
+  stat_smooth(method = "glm", se = TRUE, method.arguments = list(family = "binomial"))
+```
+
+```{r}
+# Plot DBH model with training data
+ggplot(trees_baked_train, aes(x = DBH_cm, y = yr1status)) +
+  geom_point() +
+  stat_smooth(method = "glm", se = TRUE, method.arguments = list(family = "binomial"))
+```
+
+
+### Multiple Logistic Regression
+
+Let's not limit ourselves to a single-predictor model. More predictors might lead to better model performance.
+
+
+> Question 8: Use glm() to fit a multiple logistic regression called "logistic_full", with all three of the predictors included. Which of these are significant in the resulting model?
+
+```{r}
+# build multiple logistic regression model with all three predictors
+logistic_full <- glm(yr1status ~ CVS_percent + BCHM_m + DBH_cm, family = "binomial", data = trees_train)
+
+# tidy model
+tidy(logistic_full)
+```
+
+
+### Estimate Model Accuracy
+
+Now we want to estimate our model's generalizability using resampling.
+
+> Question 9: Use cross validation to assess model accuracy. Use caret::train() to fit four 10-fold cross-validated models (cv_model1, cv_model2, cv_model3, cv_model4) that correspond to each of the four models we've fit so far: three simple logistic regression models corresponding to each of the three key predictors (CVS_percent, DBH_cm, BCHM_m) and a multiple logistic regression model that combines all three predictors.
+>
+> Question 10: Use caret::resamples() to extract then compare the classification accuracy for each model. (Hint: resamples() wont give you what you need unless you convert the outcome variable to factor form). Which model has the highest accuracy?
+
+Let's move forward with this single most accurate model.
+
+> Question 11: Compute the confusion matrix and overall fraction of correct predictions by the model.
+>
+> Question 12: Explain what the confusion matrix is telling you about the types of mistakes made by logistic regression.
+>
+> Question 13: What is the overall accuracy of the model? How is this calculated?
+
+### Test Final Model
+
+Alright, now we'll take our most accurate model and make predictions on some unseen data (the test data).
+
+> Question 14: Now that we have identified our best model, evaluate it by running a prediction on the test data, trees_test.
+>
+> Question 15: How does the accuracy of this final model on the test data compare to its cross validation accuracy? Do you find this to be surprising? Why or why not?
