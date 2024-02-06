@@ -39,6 +39,10 @@ trees_recipe <- trees_dat %>%
   prep()
 ```
 
+```{r}
+
+```
+
 
 ### Data Splitting
 
@@ -166,22 +170,22 @@ Now we want to estimate our model's generalizability using resampling.
 > Question 9: Use cross validation to assess model accuracy. Use caret::train() to fit four 10-fold cross-validated models (cv_model1, cv_model2, cv_model3, cv_model4) that correspond to each of the four models we've fit so far: three simple logistic regression models corresponding to each of the three key predictors (CVS_percent, DBH_cm, BCHM_m) and a multiple logistic regression model that combines all three predictors.
 
 ```{r}
-# Define the control parameters for 10-fold cross-validation
+# Define control parameters for 10-fold CV
 ctrl <- trainControl(method = "cv", number = 10)
 
-# Create a formula for each model
+# Create formula for each model
 formula1 <- as.formula("yr1status ~ CVS_percent")
 formula2 <- as.formula("yr1status ~ DBH_cm")
 formula3 <- as.formula("yr1status ~ BCHM_m")
 formula4 <- as.formula("yr1status ~ CVS_percent + DBH_cm + BCHM_m")
 
-# Fit the cross-validated models
+# Fit CV models
 cv_model1 <- train(formula1, data = trees_baked_train, method = "glm", trControl = ctrl, family = "binomial")
 cv_model2 <- train(formula2, data = trees_baked_train, method = "glm", trControl = ctrl, family = "binomial")
 cv_model3 <- train(formula3, data = trees_baked_train, method = "glm", trControl = ctrl, family = "binomial")
 cv_model4 <- train(formula4, data = trees_baked_train, method = "glm", trControl = ctrl, family = "binomial")
 
-# Print the cross-validated results
+# Print results
 print(cv_model1)
 print(cv_model2)
 print(cv_model3)
@@ -194,16 +198,14 @@ print(cv_model4)
 > Question 10: Use caret::resamples() to extract then compare the classification accuracy for each model. (Hint: resamples() wont give you what you need unless you convert the outcome variable to factor form). Which model has the highest accuracy?
 
 ```{r}
-# Convert the outcome variable to factor
+# Convert outcome variable to factor
 trees_baked_train$yr1status <- as.factor(trees_baked_train$yr1status)
 
-# Create a list of models
+# Create list of models
 models_list <- list(cv_model1, cv_model2, cv_model3, cv_model4)
 
 # Use resamples() to compare classification accuracy
 resamp <- resamples(models_list)
-
-# Print the summary of resampled results
 summary(resamp)
 
 ```
@@ -216,10 +218,10 @@ Let's move forward with this single most accurate model.
 
 ```{r}
 # Make predictions on your data using the trained model
-predictions <- predict(cv_model4, newdata = trees_baked_train)
+trees_predict_train <- predict(cv_model4, newdata = trees_baked_train)
 
 # Create the confusion matrix
-confusion_matrix <- confusionMatrix(predictions, reference = trees_baked_train$yr1status)
+confusion_matrix <- confusionMatrix(trees_predict_train, reference = trees_baked_train$yr1status)
 
 # Print the confusion matrix
 print(confusion_matrix)
@@ -228,20 +230,52 @@ print(confusion_matrix)
 
 
 ```{r}
-# Compute the overall fraction of correct predictions
-correct_predictions <- confusion_matrix$overall["Accuracy"]
-print(paste("Overall Fraction of Correct Predictions:", correct_predictions))
+# Compute overall fraction of correct predictions
+confusion_matrix$overall["Accuracy"]
 ```
 
 
 > Question 12: Explain what the confusion matrix is telling you about the types of mistakes made by logistic regression.
->
+
+The confusion matrix is telling us how many times our model accurately and inaccurately predicted a tree to be alive/dead during cross-validation. Specifically, it tells us that our model accurately predicted a tree to be alive 16,527 times and inaccurately predicted a tree to be alive (i.e., Type II error occurred) 852 times. In addition, the matrix also tells us that our model accurately predicted a tree to be dead 6,295 times and inaccurately predicted a tree to be dead (i.e., Type I error occurred) 1,572 times.
+
+
 > Question 13: What is the overall accuracy of the model? How is this calculated?
+
+The overall accuracy of the model is 90.4%. This is calculated as the number of correct predictions (16,527 + 6,295) divided by the total number of predictions made (25246).
 
 ### Test Final Model
 
 Alright, now we'll take our most accurate model and make predictions on some unseen data (the test data).
 
 > Question 14: Now that we have identified our best model, evaluate it by running a prediction on the test data, trees_test.
->
+
+```{r}
+# bake recipe with testing data
+trees_baked_test <- bake(trees_recipe, new_data = trees_test)
+```
+
+```{r}
+
+
+trees_baked_test$yr1status <- as.factor(trees_baked_test$yr1status)
+
+# Make predictions on your data using the trained model
+trees_predict_test <- predict(cv_model4, newdata = trees_baked_train)
+```
+
+
+
+```{r}
+# Create the confusion matrix
+confusion_matrix <- confusionMatrix(test_predict, reference = trees_baked_test$yr1status)
+
+# Print the confusion matrix
+print(confusion_matrix)
+```
+
+
+
+
+
 > Question 15: How does the accuracy of this final model on the test data compare to its cross validation accuracy? Do you find this to be surprising? Why or why not?
