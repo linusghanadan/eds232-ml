@@ -25,7 +25,8 @@ Outcome variable: *yr1status* = tree status (0=alive, 1=dead) assessed one year 
 
 Predictors: *YrFireName, Species, Genus_species, DBH_cm, CVS_percent, BCHM_m, BTL* (Information on these variables available in the database metadata ([link](https://www.fs.usda.gov/rds/archive/products/RDS-2020-0001-2/_metadata_RDS-2020-0001-2.html))).
 
-```{r}
+```{r, include=FALSE}
+# import data
 trees_dat <- read_csv(file = "https://raw.githubusercontent.com/MaRo406/eds-232-machine-learning/main/data/trees-dat.csv")
 ```
 
@@ -35,14 +36,12 @@ trees_dat <- read_csv(file = "https://raw.githubusercontent.com/MaRo406/eds-232-
 # specify a recipe
 trees_recipe <- trees_dat %>% 
   recipe(yr1status ~ .) %>%
-  step_integer(all_string_predictors(), zero_based = TRUE) %>% 
+  step_integer(all_string(), zero_based = TRUE) %>% 
   prep()
+
+# bake recipe
+trees_baked <- bake(trees_recipe, new_data = trees_dat)
 ```
-
-```{r}
-
-```
-
 
 ### Data Splitting
 
@@ -51,15 +50,16 @@ trees_recipe <- trees_dat %>%
 ```{r}
 # create training (70%) and test (30%) sets for the trees data
 set.seed(123)  # for reproducibility 
-trees_split <- initial_split(trees_dat, prop = .70)
-trees_train <- training(trees_split)
-trees_test  <- testing(trees_split)
+trees_split <- initial_split(trees_baked, prop = .70)
+trees_baked_train <- training(trees_split)
+trees_baked_test  <- testing(trees_split)
 ```
 
 > Question 3: How many observations are we using for training with this split?
 
 ```{r}
-nrow(trees_train)
+# compute training observations
+nrow(trees_baked_train)
 ```
 
 [There are 25246 observations in our training data.]{style="color:navy;"}
@@ -69,12 +69,6 @@ nrow(trees_train)
 Let's start our modeling effort with some simple models: one predictor and one outcome each.
 
 > Question 4: Choose the three predictors that most highly correlate with our outcome variable for further investigation.
-
-```{r}
-# bake recipe with training data
-trees_baked_train <- bake(trees_recipe, new_data = trees_train)
-```
-
 
 ```{r}
 # Obtain correlation matrix
@@ -87,6 +81,7 @@ corrplot(corr_mat, method = "shade", shade.col = NA, tl.col = "black", tl.srt = 
 [The three variables most correlated with *yr1status* are *CVS_percent* (0.68), *BCHM_m* (0.42), and *DBH_cm* (-0.3).]{style="color:navy;"}
 
 > Question 5: Use glm() to fit three simple logistic regression models, one for each of the predictors you identified.
+
 
 ```{r}
 # Build model for CVS_percent
@@ -103,7 +98,7 @@ tidy(model_cvs)
 tidy(model_bchm)
 tidy(model_dbh)
 
-# exponentiate the coefficients from model objects for interpretation., giving changes in odds of tree being dead one year after fire
+# exponentiate the coefficients from model objects for interpretation, giving changes in odds of tree being dead one year after fire
 exp(coef(model_cvs))
 exp(coef(model_bchm))
 exp(coef(model_dbh))
@@ -129,21 +124,21 @@ We aren't always interested in or able to interpret the model coefficients in a 
 # Plot CVS model with training data
 ggplot(trees_baked_train, aes(x = CVS_percent, y = yr1status)) +
   geom_point() +
-  stat_smooth(method = "glm", se = TRUE, method.arguments = list(family = "binomial"))
+  stat_smooth(method = "glm", se = TRUE, method.args = list(family = "binomial"))
 ```
 
 ```{r}
 # Plot BCHM model with training data
 ggplot(trees_baked_train, aes(x = BCHM_m, y = yr1status)) +
   geom_point() +
-  stat_smooth(method = "glm", se = TRUE, method.arguments = list(family = "binomial"))
+  stat_smooth(method = "glm", se = TRUE, method.args = list(family = "binomial"))
 ```
 
 ```{r}
 # Plot DBH model with training data
 ggplot(trees_baked_train, aes(x = DBH_cm, y = yr1status)) +
   geom_point() +
-  stat_smooth(method = "glm", se = TRUE, method.arguments = list(family = "binomial"))
+  stat_smooth(method = "glm", se = TRUE, method.args = list(family = "binomial"))
 ```
 
 
@@ -156,12 +151,13 @@ Let's not limit ourselves to a single-predictor model. More predictors might lea
 
 ```{r}
 # build multiple logistic regression model with all three predictors
-logistic_full <- glm(yr1status ~ CVS_percent + BCHM_m + DBH_cm, family = "binomial", data = trees_train)
+logistic_full <- glm(yr1status ~ CVS_percent + BCHM_m + DBH_cm, family = "binomial", data = trees_baked_train)
 
 # tidy model
 tidy(logistic_full)
 ```
 
+[All three predictors are statistically significant at alpha level 0.01.]{style="color:navy;"}
 
 ### Estimate Model Accuracy
 
@@ -170,6 +166,9 @@ Now we want to estimate our model's generalizability using resampling.
 > Question 9: Use cross validation to assess model accuracy. Use caret::train() to fit four 10-fold cross-validated models (cv_model1, cv_model2, cv_model3, cv_model4) that correspond to each of the four models we've fit so far: three simple logistic regression models corresponding to each of the three key predictors (CVS_percent, DBH_cm, BCHM_m) and a multiple logistic regression model that combines all three predictors.
 
 ```{r}
+# Convert outcome variable to factor
+trees_baked_train$yr1status <- as.factor(trees_baked_train$yr1status)
+
 # Define control parameters for 10-fold CV
 ctrl <- trainControl(method = "cv", number = 10)
 
@@ -198,8 +197,6 @@ print(cv_model4)
 > Question 10: Use caret::resamples() to extract then compare the classification accuracy for each model. (Hint: resamples() wont give you what you need unless you convert the outcome variable to factor form). Which model has the highest accuracy?
 
 ```{r}
-# Convert outcome variable to factor
-trees_baked_train$yr1status <- as.factor(trees_baked_train$yr1status)
 
 # Create list of models
 models_list <- list(cv_model1, cv_model2, cv_model3, cv_model4)
@@ -210,39 +207,46 @@ summary(resamp)
 
 ```
 
-
+[Model 4 has the highest median accuracy, as well as the highest minimum and maximum accuracy.]{style="color:navy;"}
 
 Let's move forward with this single most accurate model.
 
 > Question 11: Compute the confusion matrix and overall fraction of correct predictions by the model.
 
+
 ```{r}
-# Make predictions on your data using the trained model
+# Convert outcome variable to factor
+trees_baked_train$yr1status <- as.factor(trees_baked_train$yr1status)
+
+# Make predictions on training data
 trees_predict_train <- predict(cv_model4, newdata = trees_baked_train)
 
-# Create the confusion matrix
-confusion_matrix <- confusionMatrix(trees_predict_train, reference = trees_baked_train$yr1status)
+# Convert predictions to factor with the same levels as yr1status
+trees_predict_train <- factor(trees_predict_train, levels = levels(trees_baked_train$yr1status))
 
-# Print the confusion matrix
-print(confusion_matrix)
+# Create confusion matrix
+trees_confusion_matrix_train <- confusionMatrix(trees_predict_train, reference = trees_baked_train$yr1status)
+
+# Print confusion matrix
+print(trees_confusion_matrix_train)
 
 ```
 
 
 ```{r}
 # Compute overall fraction of correct predictions
-confusion_matrix$overall["Accuracy"]
+trees_confusion_matrix_train$overall["Accuracy"]
 ```
 
 
 > Question 12: Explain what the confusion matrix is telling you about the types of mistakes made by logistic regression.
 
-The confusion matrix is telling us how many times our model accurately and inaccurately predicted a tree to be alive/dead during cross-validation. Specifically, it tells us that our model accurately predicted a tree to be alive 16,527 times and inaccurately predicted a tree to be alive (i.e., Type II error occurred) 852 times. In addition, the matrix also tells us that our model accurately predicted a tree to be dead 6,295 times and inaccurately predicted a tree to be dead (i.e., Type I error occurred) 1,572 times.
+[The confusion matrix is telling us how many times our model accurately and inaccurately predicted a tree to be alive/dead during cross-validation. Specifically, it tells us that our model accurately predicted a tree to be alive 16,527 times and inaccurately predicted a tree to be alive (i.e., Type II error occurred) 852 times. In addition, the matrix also tells us that our model accurately predicted a tree to be dead 6,295 times and inaccurately predicted a tree to be dead (i.e., Type I error occurred) 1,572 times.]{style="color:navy;"}
 
 
 > Question 13: What is the overall accuracy of the model? How is this calculated?
 
-The overall accuracy of the model is 90.4%. This is calculated as the number of correct predictions (16,527 + 6,295) divided by the total number of predictions made (25246).
+[The overall accuracy of the model is 90.4%. This is calculated as the number of correct predictions (16,527 + 6,295) divided by the total number of predictions made (25246).]{style="color:navy;"}
 
 ### Test Final Model
 
@@ -250,32 +254,31 @@ Alright, now we'll take our most accurate model and make predictions on some uns
 
 > Question 14: Now that we have identified our best model, evaluate it by running a prediction on the test data, trees_test.
 
-```{r}
-# bake recipe with testing data
-trees_baked_test <- bake(trees_recipe, new_data = trees_test)
-```
 
 ```{r}
-
-
+# Convert outcome variable to factor
 trees_baked_test$yr1status <- as.factor(trees_baked_test$yr1status)
 
-# Make predictions on your data using the trained model
-trees_predict_test <- predict(cv_model4, newdata = trees_baked_train)
-```
+# Make predictions on test data
+trees_predict_test <- predict(cv_model4, newdata = trees_baked_test)
 
+# Convert predictions to factor with the same levels as yr1status
+trees_predict_test <- factor(trees_predict_test, levels = levels(trees_baked_test$yr1status))
+
+# Create confusion matrix
+trees_confusion_matrix_test <- confusionMatrix(trees_predict_test, reference = trees_baked_test$yr1status)
+
+# Print confusion matrix
+print(trees_confusion_matrix_test)
+```
 
 
 ```{r}
-# Create the confusion matrix
-confusion_matrix <- confusionMatrix(test_predict, reference = trees_baked_test$yr1status)
-
-# Print the confusion matrix
-print(confusion_matrix)
+# Compute overall fraction of correct predictions
+trees_confusion_matrix_test$overall["Accuracy"]
 ```
-
-
-
 
 
 > Question 15: How does the accuracy of this final model on the test data compare to its cross validation accuracy? Do you find this to be surprising? Why or why not?
+
+[When applied to the testing data, the model is slightly less accurate than it was during cross-validation. Since each of the 10 models we built during cross-validation were based on 10% of the training data, this does not surprise me. Even though we picked the best of these 10 models based on their performance when applied to the remaining 90% of the training data, we evaluated the overall training data performance of the best model in question 11 based on the accuracy of its predictions for all training data observations, including the 10% of the observations that the model was built using. Thus, its makes sense that it would be more accurate in this case when the model has seen 10% of the data before, compared to when it is applied to the testing data, which it has never seen before.]{style="color:navy;"}
