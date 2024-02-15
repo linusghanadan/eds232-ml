@@ -23,13 +23,23 @@ You have two options for completing this lab.
 library(spotifyr) #API interaction
 library(tidyverse)
 library(tidymodels)
+library(here)
 ```
+
+```{r}
+# Sourcing API variable
+setwd(here::here())
+api <- source('keys/keys.R')
+```
+
 
 Client ID and Client Secret are required to create and access token that is required to interact with the API. You can set them as system values so we don't have to do provide them each time.
 
 ```{r access_API}
 
-Sys.setenv(SPOTIFY_CLIENT_ID = '78d73a6f06864c0490376e08f8dc5b50') Sys.setenv(SPOTIFY_CLIENT_SECRET = 'e8c15bc9620747b9bcd29c1bea994e4e')
+Sys.setenv(SPOTIFY_CLIENT_ID = '78d73a6f06864c0490376e08f8dc5b50')
+
+Sys.setenv(SPOTIFY_CLIENT_SECRET = api)
 
 authorization_code <- get_spotify_authorization_code(scope = scopes()[c(1:19)]) #sets an authorization code that you'll need to provide for certain get_ functions via my_tracks <- get_my_saved_tracks(authorization = authorization_code)
 
@@ -39,6 +49,8 @@ access_token <- get_spotify_access_token() #takes ID and SECRET, sends to Spotif
 **Option 1: Data Preparation**
 
 You can use get_my_saved_tracks() to request all your liked tracks. It would be good if you had at least 150-200 liked tracks so the model has enough data to work with. If you don't have enough liked tracks, you can instead use get_my_recently_played(), and in that case grab at least 500 recently played tracks if you can.
+
+authorization = authorization_code
 
 The Spotify API returns a dataframe of tracks and associated attributes. However, it will only return up to 50 (or 20) tracks at a time, so you will have to make multiple requests. Use a function to combine all your requests in one call.
 
