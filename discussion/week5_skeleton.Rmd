@@ -176,26 +176,26 @@ library(kknn)
 ```
 
 
-```{r, eval = FALSE}
-train_fit = fit(knn_final, train) #fit the KNN model to the training set
+```{r}
+train_fit <- fit(knn_final, train) #fit the KNN model to the training set
 
 train_fit
 ```
 
 ```{r}
-train_predict = predict(object = train_fit, new_data = train) %>% #predict the training set
+train_predict <- predict(object = train_fit, new_data = train) %>% #predict the training set
   bind_cols(train) #bind training set column to prediction
 
-train_predict2 = predict(object = train_fit, new_data = train, type = "prob") %>% #predict the training set
+train_predict2 <- predict(object = train_fit, new_data = train, type = "prob") %>% #predict the training set
   bind_cols(train) #bind training set column to prediction
 ```
 
 ```{r}
-test_predict = predict(train_fit, test) %>% #get prediction probabilities for test 
+test_predict <- predict(train_fit, test) %>% #get prediction probabilities for test 
   bind_cols(test) %>%  #bind to testing column
   mutate(habitat = as.factor(habitat))
 
-test_predict2 = predict(train_fit, test, type = "prob") %>% #get testing prediction
+test_predict2 <- predict(train_fit, test, type = "prob") %>% #get testing prediction
   bind_cols(test) %>%  #bind to testing column
   mutate(habitat = as.factor(habitat))
 ```
@@ -208,7 +208,7 @@ accuracy(train_predict, truth = habitat, estimate = .pred_class) #get training a
 sensitivity(train_predict, truth = habitat, estimate = .pred_class)
 specificity(train_predict, truth = habitat, estimate = .pred_class)
 
-test_roc_auc = roc_curve(train_predict2, habitat,
+test_roc_auc <- roc_curve(train_predict2, habitat,
                          .pred_bathydemersal, .pred_bathypelagic, .pred_benthopelagic,
                          .pred_demersal, .pred_demersal, .pred_pelagic,
                          '.pred_pelagic-neritic', '.pred_pelagic-oceanic', '.pred_reef-associated')
@@ -217,11 +217,11 @@ test_roc_auc
 ```
 
 ```{r}
-test_predict = predict(train_fit, test) %>% #get prediction probabilities for test 
+test_predict <- predict(train_fit, test) %>% #get prediction probabilities for test 
   bind_cols(test) %>%  #bind to testing column
   mutate(habitat = as.factor(habitat))
 
-test_predict2 = predict(train_fit, test, type = "prob") %>% #get testing prediction
+test_predict2 <- predict(train_fit, test, type = "prob") %>% #get testing prediction
   bind_cols(test) %>%  #bind to testing column
   mutate(habitat = as.factor(habitat))
 ```
@@ -244,10 +244,6 @@ test_predict %>%
   autoplot(type = "heatmap") +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 30, hjust = 1))
-
-```
-
-```{r}
 
 ```
 

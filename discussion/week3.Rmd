@@ -116,7 +116,7 @@ log_workflow
 
 #### Model Fitting
 
-```{r, eval = FALSE}
+```{r}
 train_fit = fit(log_workflow, train) #fit the boosted tree model to the training set
 
 train_fit

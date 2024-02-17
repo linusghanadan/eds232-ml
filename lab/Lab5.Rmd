@@ -29,7 +29,7 @@ library(here)
 ```{r}
 # Sourcing API variable
 setwd(here::here())
-api <- source('keys/keys.R')
+#api <- source('keys/keys.R')
 ```
 
 
@@ -39,7 +39,7 @@ Client ID and Client Secret are required to create and access token that is requ
 
 Sys.setenv(SPOTIFY_CLIENT_ID = '78d73a6f06864c0490376e08f8dc5b50')
 
-Sys.setenv(SPOTIFY_CLIENT_SECRET = api)
+Sys.setenv(SPOTIFY_CLIENT_SECRET = 'e8c15bc9620747b9bcd29c1bea994e4e')
 
 authorization_code <- get_spotify_authorization_code(scope = scopes()[c(1:19)]) #sets an authorization code that you'll need to provide for certain get_ functions via my_tracks <- get_my_saved_tracks(authorization = authorization_code)
 
@@ -50,15 +50,63 @@ access_token <- get_spotify_access_token() #takes ID and SECRET, sends to Spotif
 
 You can use get_my_saved_tracks() to request all your liked tracks. It would be good if you had at least 150-200 liked tracks so the model has enough data to work with. If you don't have enough liked tracks, you can instead use get_my_recently_played(), and in that case grab at least 500 recently played tracks if you can.
 
-authorization = authorization_code
+```{r}
+my_tracks <- get_my_saved_tracks(authorization = authorization_code, limit = 50)
+```
 
-The Spotify API returns a dataframe of tracks and associated attributes. However, it will only return up to 50 (or 20) tracks at a time, so you will have to make multiple requests. Use a function to combine all your requests in one call.
 
-Once you have your tracks, familiarize yourself with this initial dataframe. You'll need to request some additional information for the analysis. If you give the API a list of track IDs using get_track_audio_features(), it will return an audio features dataframe of all the tracks and some attributes of them.
+change details
+```{r}
+offsets = seq(from = 0, to = 150, by = 50)
+
+#initializing an empty df 
+my_tracks <- data.frame(matrix(nrow = 0, ncol = 30))
+
+# function to get my 150 most recently liked tracks 
+for (i in seq_along(offsets)) {  
+  liked_tracks = get_my_saved_tracks(authorization = authorization_code, limit = 50, 
+                                     offset = offsets[i])
+  df_temp = as.data.frame(liked_tracks) # creating a temporary data frame to store the 50 liked tracks from a given run
+  my_tracks <- rbind(my_tracks, df_temp) # binding the temporary data frame to my liked tracks data frame 
+}
+```
+
 
 These track audio features are the predictors we are interested in, but this dataframe doesn't have the actual names of the tracks. Append the 'track.name' column from your favorite tracks database.
 
+
+```{r}
+first100 <- get_track_audio_features(my_tracks$track.id[1:100])
+second100 <- get_track_audio_features(my_tracks$track.id[101:200])
+```
+
+```{r}
+audio_features <- rbind(first100, second100)
+```
+
+```{r}
+linus_tracks <- my_tracks %>% 
+  select(track.name) %>% 
+  cbind(audio_features) %>% 
+  mutate(name = "linus")
+```
+
+```{r}
+write.csv(linus_tracks,'linus_tracks.csv', row.names = FALSE)
+```
+
+
 Find a class mate whose data you would like to use. Add your partner's data to your dataset. Create a new column that will contain the outcome variable that you will try to predict. This variable should contain two values that represent if the track came from your data set or your partner's.
+
+```{r}
+maxwell_tracks <- read.csv(here::here("lab", "data", "maxwell_songs.csv")) %>% 
+  mutate(name = "maxwell")
+```
+
+```{r}
+combined_tracks <- rbind(linus_tracks, maxwell_tracks)
+```
+
 
 **Option 2: Data preparation**
 
@@ -69,6 +117,13 @@ Inspect the data. Choose two genres you'd like to use for the classification tas
 ###Data Exploration (both options)
 
 Let's take a look at your data. Do some exploratory summary stats and visualization.
+
+```{r}
+combined_tracks %>% 
+  group_by(name, danceability) %>% 
+  summarise()
+```
+
 
 For example: What are the most danceable tracks in your dataset? What are some differences in the data between users (Option 1) or genres (Option 2)?
 
@@ -83,6 +138,65 @@ Option 2. genre 1 or genre 2
 You will eventually create four final candidate models:
 
 1.  k-nearest neighbor (Week 5)
+
+```{r}
+library(kknn)
+```
+
+
+```{r}
+combined_tracks <- combined_tracks %>% 
+  select(-track.name, -type, -id, -uri, -track_href, -analysis_url)
+```
+
+
+```{r}
+set.seed(123)
+#initial split of data, default 75/25
+tracks_split <- initial_split(combined_tracks)
+tracks_test <- testing(tracks_split)
+tracks_train <- training(tracks_split)
+```
+
+```{r}
+#preprocessing
+knn_recipe <- recipe(name ~ ., data = tracks_train) %>%
+  step_dummy(all_nominal_predictors()) %>%
+  step_normalize(all_numeric_predictors()) %>%
+  prep()
+
+baked_train <- bake(knn_recipe, tracks_train)
+```
+
+```{r}
+knn_spec <- nearest_neighbor(neighbors = tune()) %>%
+  set_engine("kknn") %>%
+  set_mode("classification")
+```
+
+```{r}
+knn_workflow <- workflow() %>%
+  add_model(knn_spec) %>%
+  add_recipe(knn_recipe)
+```
+
+```{r}
+# 5-fold CV on the training dataset (instead of 10 for in-class demo)
+cv_folds <- tracks_train %>% vfold_cv(v = 10)
+```
+
+```{r}
+# Fit the workflow on our predefined folds and a grid of hyperparameters
+fit_knn_cv <- 
+  knn_workflow %>%
+  tune_grid(cv_folds)
+```
+
+```{r}
+autoplot(fit_knn_cv)
+```
+
+
 2.  decision tree (Week 5)
 3.  bagged tree (Week 6)
     -   bag_tree()
