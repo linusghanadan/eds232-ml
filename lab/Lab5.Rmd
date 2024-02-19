@@ -545,21 +545,25 @@ Use appropriate performance evaluation metric(s) for this classification task. A
 ```{r}
 # Create a data frame
 metrics_df <- tibble(
-  Method = rep(c("KNN", "Decision Tree", "Bagged Trees", "Random Forest"), each = 4),
-  Metric = rep(c("Accuracy", "Sensitivity", "Specificity", "ROC AUC"), times = 4),
-  Value = c(accuracy_knn$.estimate[1], sensitivity_knn$.estimate[1], specificity_knn$.estimate[1], roc_auc_knn$.estimate[1],
-            accuracy_tree$.estimate[1], sensitivity_tree$.estimate[1], specificity_tree$.estimate[1], roc_auc_tree$.estimate[1],
-            accuracy_bag$.estimate[1], sensitivity_bag$.estimate[1], specificity_bag$.estimate[1], roc_auc_bag$.estimate[1],
-            accuracy_rf$.estimate[1], sensitivity_rf$.estimate[1], specificity_rf$.estimate[1], roc_auc_rf$.estimate[1])
-)
+  Method = rep(c("KNN", "Decision Tree", "Bagged Trees", "Random Forest"), times = 2),
+  Metric = rep(c("Accuracy", "ROC AUC"), each = 4),
+  Value = c(accuracy_knn$.estimate[1], accuracy_tree$.estimate[1],
+            accuracy_bag$.estimate[1], accuracy_rf$.estimate[1],
+            roc_auc_knn$.estimate[1], roc_auc_tree$.estimate[1],
+            roc_auc_bag$.estimate[1], roc_auc_rf$.estimate[1]))
 
 ```
 
 ```{r}
 ggplot(metrics_df, aes(x = Method, y = Value, fill = Metric)) + 
-  geom_bar(stat = "identity", position = "dodge") +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.9)) +
+  geom_text(aes(label = sprintf("%.2f", Value),
+                y = Value + 0.02),
+            position = position_dodge(width = 0.9),
+            vjust = 0,
+            size = 2) +
   theme_minimal() +
-  labs(y = "Metric Value", x = "Classification Method", title = "Performance Metrics by Classification Method") +
+  labs(y = "Metric Value", x = "Model", title = "Model Comparison") +
   scale_fill_brewer(palette = "Pastel1") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
