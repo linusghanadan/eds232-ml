@@ -416,7 +416,7 @@ test_predict_bag <- predict(fit_bag_tree, tracks_test, type = "prob") %>% # get 
 conf_matrix_bag <- test_predict_bag %>%
   conf_mat(truth = name, estimate = .pred_class) %>%
   autoplot(type = "heatmap") +
-  ggtitle("Bagged DT") +
+  ggtitle("Bagged DTs") +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 30, hjust = 1),
         legend.position = "none")
