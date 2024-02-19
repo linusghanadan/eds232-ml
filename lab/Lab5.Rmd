@@ -24,7 +24,7 @@ library(spotifyr) #API interaction
 library(tidyverse)
 library(tidymodels)
 library(here)
-library(knn)
+library(patchwork)
 library(baguette)
 ```
 
@@ -100,11 +100,11 @@ Find a class mate whose data you would like to use. Add your partner's data to y
 
 ```{r}
 # read in my data (CSV that was previously written)
-linus_tracks <- read.csv(here::here("lab", "data", "maxwell_songs.csv"))
+linus_tracks <- read.csv(here::here("lab", "data", "linus_tracks.csv"))
 
 # read in partner data
 maxwell_tracks <- read.csv(here::here("lab", "data", "maxwell_songs.csv")) %>% 
-  mutate(name = "maxwell") %>% 
+  mutate(name = "maxwell")
 
 # bind my liked songs df with partner df
 combined_tracks <- rbind(linus_tracks, maxwell_tracks)
@@ -235,7 +235,7 @@ knn_spec <- nearest_neighbor(neighbors = tune()) %>%
 # create workflow
 knn_workflow <- workflow() %>%
   add_model(knn_spec) %>%
-  add_recipe(knn_recipe)
+  add_recipe(tracks_recipe)
 ```
 
 ```{r}
@@ -265,21 +265,30 @@ final_fit <- final_wf %>%
 test_predict_knn <- predict(final_fit, tracks_test) %>% # get prediction probabilities for test 
   bind_cols(tracks_test) %>%  # bind to testing column
   mutate(name = as.factor(name))
+
+test_predict_knn <- predict(final_fit, tracks_test, type = "prob") %>% # get prediction probabilities for test 
+  bind_cols(test_predict_knn)
 ```
 
 ```{r}
 # visualize confusion matrix for predictions made on testing data
-test_predict_knn %>% 
+conf_matrix_knn <- test_predict_knn %>% 
   conf_mat(truth = name, estimate = .pred_class) %>% 
   autoplot(type = "heatmap") +
+  ggtitle("KNN") +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 30, hjust = 1))
 ```
 
 ```{r}
-accuracy_knn <- accuracy(test_predict, truth = name, estimate = .pred_class) # get accuracy of testing prediction
-sensitivity_knn <- sensitivity(test_predict, truth = name, estimate = .pred_class)
-specificity_knn <- specificity(test_predict, truth = name, estimate = .pred_class)
+accuracy_knn <- accuracy(test_predict_knn, truth = name, estimate = .pred_class) # get accuracy of testing prediction
+sensitivity_knn <- sensitivity(test_predict_knn, truth = name, estimate = .pred_class)
+specificity_knn <- specificity(test_predict_knn, truth = name, estimate = .pred_class)
+```
+
+```{r}
+
+roc_auc_knn <- roc_auc(test_predict_knn, truth = name, .pred_linus)
 ```
 
 
@@ -336,28 +345,39 @@ final_tree_fit <- fit(final_tree, as.factor(name)~., tracks_train)
 test_predict_tree <- predict(final_tree_fit, tracks_test) %>% # get prediction probabilities for test 
   bind_cols(tracks_test) %>%  # bind to testing column
   mutate(name = as.factor(name))
+
+test_predict_tree <- predict(final_tree_fit, tracks_test, type = "prob") %>% # get prediction probabilities for test 
+  bind_cols(test_predict_tree)
+
 ```
 
 
 ```{r}
 # visualize confusion matrix for predictions made on testing data
-test_predict_tree %>% 
+conf_matrix_tree <- test_predict_tree %>% 
   conf_mat(truth = name, estimate = .pred_class) %>% 
   autoplot(type = "heatmap") +
+  ggtitle("DT") +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 30, hjust = 1))
 ```
 
 ```{r}
-accuracy_tree <- accuracy(test_predict, truth = name, estimate = .pred_class) # get accuracy of testing prediction
-sensitivity_tree <- sensitivity(test_predict, truth = name, estimate = .pred_class)
-specificity_tree <- specificity(test_predict, truth = name, estimate = .pred_class)
+accuracy_tree <- accuracy(test_predict_tree, truth = name, estimate = .pred_class) # get accuracy of testing prediction
+sensitivity_tree <- sensitivity(test_predict_tree, truth = name, estimate = .pred_class)
+specificity_tree <- specificity(test_predict_tree, truth = name, estimate = .pred_class)
+roc_auc_tree <- roc_auc(test_predict_tree, truth = name, .pred_linus)
 ```
 
 
 3.  bagged tree (Week 6)
     -   bag_tree()
     -   Use the "times =" argument when setting the engine during model specification to specify the number of trees. The rule of thumb is that 50-500 trees is usually sufficient. The bottom of that range should be sufficient here.
+    
+```{r}
+library(baguette)
+```
+
     
 ```{r}
 # specify Bagged Tree model
@@ -384,22 +404,27 @@ fit_bag_tree <- wf_bag_tree %>%
 test_predict_bag <- predict(fit_bag_tree, tracks_test) %>% # get prediction probabilities for test 
   bind_cols(tracks_test) %>%  # bind to testing column
   mutate(name = as.factor(name))
+
+test_predict_bag <- predict(fit_bag_tree, tracks_test, type = "prob") %>% # get prediction probabilities for test
+  bind_cols(test_predict_bag)
 ```
 
 ```{r}
 # visualize confusion matrix for predictions made on testing data
-test_predict_bag %>%
+conf_matrix_bag <- test_predict_bag %>%
   conf_mat(truth = name, estimate = .pred_class) %>%
   autoplot(type = "heatmap") +
+  ggtitle("Bagged DT") +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 30, hjust = 1))
 ```
 
 ```{r}
 # Evaluate model performance
-accuracy_bag <- accuracy(test_predict, truth = name, estimate = .pred_class) # get accuracy of testing prediction
-sensitivity_bag <- sensitivity(test_predict, truth = name, estimate = .pred_class)
-specificity_bag <- specificity(test_predict, truth = name, estimate = .pred_class)
+accuracy_bag <- accuracy(test_predict_bag, truth = name, estimate = .pred_class)
+sensitivity_bag <- sensitivity(test_predict_bag, truth = name, estimate = .pred_class)
+specificity_bag <- specificity(test_predict_bag, truth = name, estimate = .pred_class)
+roc_auc_bag <- roc_auc(test_predict_bag, truth = name, .pred_linus)
 ```
 
     
@@ -476,13 +501,17 @@ test_predict_rf <- predict(final_rf_fit, tracks_test) %>%
   bind_cols(tracks_test) %>%
   mutate(name = as.factor(name))
 
+test_predict_rf <- predict(final_rf_fit, tracks_test, type = "prob") %>% # get prediction probabilities for test
+  bind_cols(test_predict_rf)
 ```
+
 
 ```{r}
 # visualize confusion matrix for predictions made on testing data
-test_predict_rf %>%
+conf_matrix_rf <- test_predict_rf %>%
   conf_mat(truth = name, estimate = .pred_class) %>%
   autoplot(type = "heatmap") +
+  ggtitle("Random Forest") +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 30, hjust = 1))
 
@@ -490,10 +519,10 @@ test_predict_rf %>%
 
 ```{r}
 # Evaluate model performance
-accuracy_rf <- accuracy(test_predict, truth = name, estimate = .pred_class) # get accuracy of testing prediction
-sensitivity_rf <- sensitivity(test_predict, truth = name, estimate = .pred_class)
-specificity_rf <- specificity(test_predict, truth = name, estimate = .pred_class)
-
+accuracy_rf <- accuracy(test_predict_rf, truth = name, estimate = .pred_class) # get accuracy of testing prediction
+sensitivity_rf <- sensitivity(test_predict_rf, truth = name, estimate = .pred_class)
+specificity_rf <- specificity(test_predict_rf, truth = name, estimate = .pred_class)
+roc_auc_rf <- roc_auc(test_predict_rf, truth = name, .pred_linus)
 ```
 
 
@@ -512,12 +541,30 @@ Use appropriate performance evaluation metric(s) for this classification task. A
 ```{r}
 # Create a data frame
 metrics_df <- tibble(
-  Method = rep(c("KNN", "Decision Tree", "Bagged Trees", "Random Forest"), each = 3),
-  Metric = rep(c("Accuracy", "Sensitivity", "Specificity"), times = 4),
-  Value = c(accuracy_knn, sensitivity_knn, specificity_knn, 
-            accuracy_dt, sensitivity_dt, specificity_dt,
-            accuracy_bagged, sensitivity_bagged, specificity_bagged,
-            accuracy_rf, sensitivity_rf, specificity_rf)
+  Method = rep(c("KNN", "Decision Tree", "Bagged Trees", "Random Forest"), each = 4),
+  Metric = rep(c("Accuracy", "Sensitivity", "Specificity", "ROC AUC"), times = 4),
+  Value = c(accuracy_knn$.estimate[1], sensitivity_knn$.estimate[1], specificity_knn$.estimate[1], roc_auc_knn$.estimate[1],
+            accuracy_tree$.estimate[1], sensitivity_tree$.estimate[1], specificity_tree$.estimate[1], roc_auc_tree$.estimate[1],
+            accuracy_bag$.estimate[1], sensitivity_bag$.estimate[1], specificity_bag$.estimate[1], roc_auc_bag$.estimate[1],
+            accuracy_rf$.estimate[1], sensitivity_rf$.estimate[1], specificity_rf$.estimate[1], roc_auc_rf$.estimate[1])
 )
+
 ```
+
+```{r}
+ggplot(metrics_df, aes(x = Method, y = Value, fill = Metric)) + 
+  geom_bar(stat = "identity", position = "dodge") +
+  theme_minimal() +
+  labs(y = "Metric Value", x = "Classification Method", title = "Performance Metrics by Classification Method") +
+  scale_fill_brewer(palette = "Pastel1") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+
+```{r}
+conf_matrix_knn + conf_matrix_tree + conf_matrix_bag + conf_matrix_rf +
+  plot_layout(nrow = 2, ncol = 2)
+```
+
+
 
