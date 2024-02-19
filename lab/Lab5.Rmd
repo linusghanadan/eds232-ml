@@ -277,7 +277,8 @@ conf_matrix_knn <- test_predict_knn %>%
   autoplot(type = "heatmap") +
   ggtitle("KNN") +
   theme_bw() +
-  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+  theme(axis.text.x = element_text(angle = 30, hjust = 1),
+        legend.position = "none")
 ```
 
 ```{r}
@@ -359,7 +360,8 @@ conf_matrix_tree <- test_predict_tree %>%
   autoplot(type = "heatmap") +
   ggtitle("DT") +
   theme_bw() +
-  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+  theme(axis.text.x = element_text(angle = 30, hjust = 1),
+        legend.position = "none")
 ```
 
 ```{r}
@@ -416,7 +418,8 @@ conf_matrix_bag <- test_predict_bag %>%
   autoplot(type = "heatmap") +
   ggtitle("Bagged DT") +
   theme_bw() +
-  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+  theme(axis.text.x = element_text(angle = 30, hjust = 1),
+        legend.position = "none")
 ```
 
 ```{r}
@@ -511,9 +514,10 @@ test_predict_rf <- predict(final_rf_fit, tracks_test, type = "prob") %>% # get p
 conf_matrix_rf <- test_predict_rf %>%
   conf_mat(truth = name, estimate = .pred_class) %>%
   autoplot(type = "heatmap") +
-  ggtitle("Random Forest") +
+  ggtitle("RF") +
   theme_bw() +
-  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+  theme(axis.text.x = element_text(angle = 30, hjust = 1),
+        legend.position = "none")
 
 ```
 
