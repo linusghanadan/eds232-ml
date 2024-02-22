@@ -19,6 +19,12 @@ You have two options for completing this lab.
 
 **Option 2**: **Classify by genres**. Build models that predict which genre a song belongs to. This will use a pre-existing Spotify dataset available from Kaggle.com (<https://www.kaggle.com/datasets/mrmorj/dataset-of-songs-in-spotify>)
 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(include = TRUE, message = FALSE, warning = FALSE)
+```
+
+
 ```{r}
 # library(spotifyr) #API interaction
 library(tidyverse)
