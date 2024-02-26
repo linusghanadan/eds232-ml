@@ -113,9 +113,9 @@ xgboost_tune <- tune_grid(
 
 
 ```{r}
-# determine optimal learning rate
-best_xgboost_lr <- select_best(xgboost_tune, "accuracy")
-best_xgboost_lr
+# determine optimal learning rate and store
+best_lr <- select_best(xgboost_tune, "accuracy")
+best_lr$learn_rate
 ```
 
 
@@ -124,23 +124,77 @@ best_xgboost_lr
 1.  Create a new specification where you set the learning rate (which you already optimized) and tune the tree parameters.
 
 ```{r}
-# create grid of hyperparameters
-tree_grid <- grid_regular(tree_depth(), levels = 4)
+# Create a new model specification with the optimized learning rate
+# and parameters to tune for tree complexity
+xgboost_spec_tree <- boost_tree(
+  trees = 3000, # Set a high number of trees for now; we'll use early stopping to find the optimal number
+  tree_depth = tune(), # or use max_depth = tune() depending on your version of tidymodels/xgboost
+  min_n = tune(),
+  learn_rate = best_lr$learn_rate, # use the optimized learning rate
+  loss_reduction = tune(),
+  mode = "classification",
+  engine = "xgboost"
+)
 ```
 
 2.  Set up a tuning grid. This time use grid_latin_hypercube() to get a representative sampling of the parameter space
 
 ```{r}
 # create a tuning grid
-rf_grid <- grid_latin_hypercube(
-  mtry(range = c(2, 4)), 
-  min_n(c(1, 10)),
-  size = 20
-)
+tree_grid <- grid_latin_hypercube(
+  tree_depth(),
+  min_n(),
+  loss_reduction(),
+  size = 10)
+
+
 ```
 
 
 3.  Show the performance of the best models and the estimates for the tree parameter values associated with each.
+
+```{r}
+# Create workflow and tune the model with the new specification
+xgboost_workflow_tree <- workflow() %>%
+  add_model(xgboost_spec_tree) %>%
+  add_recipe(eel_recipe)
+
+# Tune the tree-based parameters
+xgboost_tree_tune <- tune_grid(
+  xgboost_workflow_tree,
+  resamples = cv_folds,
+  grid = tree_grid
+)
+```
+
+```{r}
+# Collect and show the metrics for the best models
+best_models_metrics <- xgboost_tree_tune %>%
+  collect_metrics() %>%
+  filter(.metric == "accuracy") %>% # assuming accuracy is your metric of interest
+  arrange(desc(mean)) # arrange by the highest mean accuracy
+
+# Show the best models' metrics
+print(best_models_metrics)
+
+# To see the parameters for the best model (or models if you want to inspect more)
+# best_models_parameters <- xgboost_tree_tune %>%
+#   collect_parameters() %>%
+#   arrange(desc(mean_accuracy)) %>%
+#   select(tree_depth, min_n, everything()) # adjust this line based on the parameters you tuned
+# 
+# # Show the best models' parameters
+# print(best_models_parameters)
+```
+
+```{r}
+# Additionally, to get the exact parameters of the best model, use select_best()
+best_tree_params <- select_best(xgboost_tree_tune, "accuracy")
+
+# Print the best parameters
+print(best_tree_params)
+```
+
 
 ### Tune Stochastic Parameters
 
