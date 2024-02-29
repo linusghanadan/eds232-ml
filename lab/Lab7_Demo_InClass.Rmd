@@ -152,15 +152,16 @@ Do you notice anything different about the spacing between clusters?  Why might 
 Run summary() on your model object.  Does anything stand out?
 
 ```{r}
-summary(kmeans_result)
+# Inspect model object
+kmeans_result
 ```
 
-
+[Looking at the specific values, 'size', which give the number of points allocated to each of the three clusters, stands out because cluster 2 and cluster 3 both have more than double the number of points as cluster 1. In addition, our 'withinss' values, which give the within-cluster variation for each of the three clusters, stands out because cluster 3 has over five times more variation than cluster 1 and over three times more variation than cluster 2.]{style="color:navy;"}
 
 2. Good, now let's move to hierarchical clustering that we saw in lecture. The first step for that is to calculate a distance matrix on the data (using dist()). Euclidean is a good choice for the distance method.
 
 ```{r}
-# Calculate the distance matrix
+# Calculate distance matrix
 dist_matrix <- dist(metals_dat2, method = "euclidean")
 ```
 
@@ -171,14 +172,11 @@ dist_matrix <- dist(metals_dat2, method = "euclidean")
 tidy(dist_matrix)
 ```
 
+[Each row of this table tells us the Euclidean distance between a set of two points in our data. There are 1770 rows in the table, one for each unique set of points.]{style="color:navy;"}
 
 3. Then apply hierarchical clustering with hclust().
 
 ```{r}
-
-# For a true 'tidy' format, we'd typically melt the matrix into a long format. However, this isn't directly supported for dist objects.
-# Instead, we'll proceed to hierarchical clustering.
-
 # 3. Apply hierarchical clustering
 hc_result <- hclust(dist_matrix)
 ```
@@ -193,7 +191,6 @@ plot(as.dendrogram(hc_result), main = "Hierarchical Clustering Dendrogram")
 
 ```
 
-
 How does the plot look? Do you see any outliers?  How can you tell?  
 
-
+[The plot looks as expected. 51 is clearly an outlier point because starting from the bottom of the dendrogram and moving up, it is by far the last point to be assigned to a cluster that includes any other points besides itself, and when this assignment does occur, the point is about 80 distance units away from the centroid of the cluster it is assigned to. Comparatively, the point with the next highest distance away from the centroid of its initial assignment to a cluster containing more than just itself is 15, at about 40 distance units.]{style="color:navy;"}
