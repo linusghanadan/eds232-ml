@@ -129,24 +129,25 @@ metals_dat2 <- metals_dat[, 4:8]
 1. Start with k-means clustering - kmeans().  You can start with fviz_nbclust() to identify the best value of k. Then plot the model you obtain with the optimal value of k. 
 
 ```{r}
-set.seed(123) # Setting seed for reproducibility
+# Set seed
+set.seed(123)
 ```
 
-
 ```{r}
-# Find the optimal number of clusters.
+# Find optimal number of clusters using elbow method
 fviz_nbclust(metals_dat2, kmeans, method = "wss")
 
-# Perform k-means clustering
+# Perform k-means clustering with 3 clusters
 kmeans_result <- kmeans(metals_dat2, centers = 3, nstart = 25)
 
-# Plotting the clusters
+# Plot the clusters
 fviz_cluster(kmeans_result, geom = "point", data = metals_dat2) + ggtitle("k=3")
 ```
 
-
-
 Do you notice anything different about the spacing between clusters?  Why might this be?
+
+[When we connect the outermost points in each cluster, we see that there is overlap between the far right side of cluster 2 and the far left side of cluster 3. The points near this boundary might have been assigned this way just because of the other nearby points that belonged to each cluster, or this could indicate that we should have chosen a larger number of clusters.]{style="color:navy;"}
+
 
 Run summary() on your model object.  Does anything stand out?
 
@@ -155,13 +156,43 @@ summary(kmeans_result)
 ```
 
 
+
 2. Good, now let's move to hierarchical clustering that we saw in lecture. The first step for that is to calculate a distance matrix on the data (using dist()). Euclidean is a good choice for the distance method.
+
+```{r}
+# Calculate the distance matrix
+dist_matrix <- dist(metals_dat2, method = "euclidean")
+```
+
 
 2. Use tidy() on the distance matrix so you can see what is going on. What does each row in the resulting table represent?
 
+```{r}
+tidy(dist_matrix)
+```
+
+
 3. Then apply hierarchical clustering with hclust().
 
+```{r}
+
+# For a true 'tidy' format, we'd typically melt the matrix into a long format. However, this isn't directly supported for dist objects.
+# Instead, we'll proceed to hierarchical clustering.
+
+# 3. Apply hierarchical clustering
+hc_result <- hclust(dist_matrix)
+```
+
+
 4. Now plot the clustering object. You can use something of the form plot(as.dendrogram()).  Or you can check out the cool visual options here: https://rpubs.com/gaston/dendrograms
+
+```{r}
+
+# 4. Plot the clustering object
+plot(as.dendrogram(hc_result), main = "Hierarchical Clustering Dendrogram")
+
+```
+
 
 How does the plot look? Do you see any outliers?  How can you tell?  
 
