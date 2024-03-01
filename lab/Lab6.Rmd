@@ -9,7 +9,14 @@ output: html_document
 
 This week's lab follows a project modeling the eel species Anguilla australis described by Elith et al. (2008). There are two data sets for this lab.  You'll use one for training and evaluating your model, and you'll use your model to make predictions predictions on the other.  Then you'll compare your model's performance to the model used by Elith et al.
 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(include = TRUE, message = FALSE, warning = FALSE)
+```
+
+
 ```{r}
+# load packages
 library(here)
 library(tidyverse)
 library(tidymodels)
@@ -22,9 +29,11 @@ Grab the training data sets (eel.model.data.csv, eel.eval.data.csv) from github 
 https://github.com/MaRo406/eds-232-machine-learning/blob/main/data 
 
 ```{r}
+# read in data
 eel_data <- read.csv(here::here("lab", "data", "eel.model.data.csv")) %>%
   janitor::clean_names() %>% 
-  mutate(angaus = as.factor(angaus))
+  mutate(angaus = as.factor(angaus)) %>% 
+  select(-site)
 ```
 
 
@@ -76,7 +85,7 @@ Following the XGBoost tuning strategy outlined in lecture, first we conduct tuni
 -   Only specify one parameter to tune()
 
 ```{r}
-# specify model
+# specify model for tuning learning rate
 xgboost_spec <- boost_tree(mode = "classification",
                            engine = "xgboost",
                            learn_rate = tune())
@@ -89,6 +98,7 @@ xgboost_spec <- boost_tree(mode = "classification",
 -   Use appropriate metrics argument(s) - Computational efficiency becomes a factor as models get more complex and data get larger. Record the time it takes to run. Do this for each tuning phase you run.You could use {tictoc} or Sys.time().
 
 ```{r}
+# create tuning grid for learning rate
 lr_grid <- expand.grid(learn_rate = seq(0.0001, 0.3, length.out = 30))
 ```
 
@@ -96,14 +106,14 @@ lr_grid <- expand.grid(learn_rate = seq(0.0001, 0.3, length.out = 30))
 3.  Show the performance of the best models and the estimates for the learning rate parameter values associated with each.
 
 ```{r}
-# create workflow
+# create workflow for tuning learning rate
 xgboost_workflow <- workflow() %>%
   add_model(xgboost_spec) %>%
   add_recipe(eel_recipe)
 ```
 
 ```{r}
-# tune the model
+# tune the model for optimal learning rate
 xgboost_tune <- tune_grid(
   xgboost_workflow,
   resamples = cv_folds,
@@ -113,7 +123,7 @@ xgboost_tune <- tune_grid(
 
 
 ```{r}
-# determine optimal learning rate and store
+# store optimized learning rate
 best_lr <- select_best(xgboost_tune, "accuracy")
 best_lr$learn_rate
 ```
@@ -124,13 +134,12 @@ best_lr$learn_rate
 1.  Create a new specification where you set the learning rate (which you already optimized) and tune the tree parameters.
 
 ```{r}
-# Create a new model specification with the optimized learning rate
-# and parameters to tune for tree complexity
+# specify model with optimized learning rate to tune tree-based parameters
 xgboost_spec_tree <- boost_tree(
-  trees = 3000, # Set a high number of trees for now; we'll use early stopping to find the optimal number
-  tree_depth = tune(), # or use max_depth = tune() depending on your version of tidymodels/xgboost
+  trees = 3000,
+  tree_depth = tune(),
   min_n = tune(),
-  learn_rate = best_lr$learn_rate, # use the optimized learning rate
+  learn_rate = best_lr$learn_rate,
   loss_reduction = tune(),
   mode = "classification",
   engine = "xgboost"
@@ -140,7 +149,7 @@ xgboost_spec_tree <- boost_tree(
 2.  Set up a tuning grid. This time use grid_latin_hypercube() to get a representative sampling of the parameter space
 
 ```{r}
-# create a tuning grid
+# create tuning grid for tree-based parameters
 tree_grid <- grid_latin_hypercube(
   tree_depth(),
   min_n(),
@@ -154,12 +163,12 @@ tree_grid <- grid_latin_hypercube(
 3.  Show the performance of the best models and the estimates for the tree parameter values associated with each.
 
 ```{r}
-# Create workflow and tune the model with the new specification
+# create workflow for tuning tree-based parameters
 xgboost_workflow_tree <- workflow() %>%
   add_model(xgboost_spec_tree) %>%
   add_recipe(eel_recipe)
 
-# Tune the tree-based parameters
+# tune tree-based parameters
 xgboost_tree_tune <- tune_grid(
   xgboost_workflow_tree,
   resamples = cv_folds,
@@ -168,51 +177,170 @@ xgboost_tree_tune <- tune_grid(
 ```
 
 ```{r}
-# Collect and show the metrics for the best models
+# collect metrics for best models
 best_models_metrics <- xgboost_tree_tune %>%
   collect_metrics() %>%
   filter(.metric == "accuracy") %>% # assuming accuracy is your metric of interest
   arrange(desc(mean)) # arrange by the highest mean accuracy
 
-# Show the best models' metrics
-print(best_models_metrics)
-
-# To see the parameters for the best model (or models if you want to inspect more)
-# best_models_parameters <- xgboost_tree_tune %>%
-#   collect_parameters() %>%
-#   arrange(desc(mean_accuracy)) %>%
-#   select(tree_depth, min_n, everything()) # adjust this line based on the parameters you tuned
-# 
-# # Show the best models' parameters
-# print(best_models_parameters)
-```
-
-```{r}
-# Additionally, to get the exact parameters of the best model, use select_best()
+# store parameters of best model
 best_tree_params <- select_best(xgboost_tree_tune, "accuracy")
 
-# Print the best parameters
-print(best_tree_params)
+# show metrics of best models
+print(best_models_metrics)
+
 ```
+
 
 
 ### Tune Stochastic Parameters
 
 1.  Create a new specification where you set the learning rate and tree parameters (which you already optimized) and tune the stochastic parameters.
 
+```{r}
+# specify model with optimized learning rate and tree parameters to tune based on stochastic parameters
+xgboost_spec_stochastic <- boost_tree(
+  trees = 3000,
+  tree_depth = best_tree_params$tree_depth,
+  min_n = best_tree_params$min_n,
+  learn_rate = best_lr$learn_rate,
+  loss_reduction = best_tree_params$loss_reduction,
+  mtry = tune(),
+  sample_size = tune(),
+  mode = "classification",
+  engine = "xgboost"
+)
+```
+
+
+
 2.  Set up a tuning grid. Use grid_latin_hypercube() again.
+
+```{r}
+# finalize mtry range based on the number of predictors
+mtry_finalized <- finalize(mtry(), eel_train)
+
+# create tuning grid for stochastic parameters
+stochastic_grid <- grid_latin_hypercube(
+  mtry_finalized,
+  sample_size = sample_prop(),
+  size = 10
+)
+
+```
 
 3.  Show the performance of the best models and the estimates for the tree parameter values associated with each.
 
+```{r}
+# create workflow for tuning stochastic parameters
+xgboost_workflow_stochastic <- workflow() %>%
+  add_model(xgboost_spec_stochastic) %>%
+  add_recipe(eel_recipe)
+
+# tune stochastic parameters
+xgboost_stochastic_tune <- tune_grid(
+  xgboost_workflow_stochastic,
+  resamples = cv_folds,
+  grid = stochastic_grid
+)
+```
+
+```{r}
+# collect metrics for best models
+best_stochastic_metrics <- xgboost_stochastic_tune %>%
+  collect_metrics() %>%
+  filter(.metric == "accuracy") %>%
+  arrange(desc(mean)) # arrange by highest mean accuracy
+
+# store parameters of best model
+best_stochastic_params <- select_best(xgboost_stochastic_tune, "accuracy")
+
+# show metrics of best models
+print(best_stochastic_metrics)
+
+```
+
+
+
 ## Finalize workflow and make final prediction
 
+```{r}
+# specify final model with optimized parameters
+final_xgboost_model <- finalize_model(
+  xgboost_spec_stochastic,
+  best_stochastic_params
+)
+
+# fit final model to training data
+final_fit <- fit(
+  final_xgboost_model,
+  formula = angaus ~ .,
+  data = eel_train
+)
+```
+
+```{r}
+
+# predict testing data
+test_predict <- predict(final_fit, eel_test) %>%
+  bind_cols(eel_test) # bind predictions column to testing data
+
+# create confusion matrix
+conf_mat(data = test_predict, truth = angaus, estimate = .pred_class) %>% 
+  autoplot(type = "heatmap")
+```
+
+
 1.  How well did your model perform? What types of errors did it make?
+
+```{r}
+# get accuracy, sensitivity, and specificity
+accuracy(test_predict, truth = angaus, estimate = .pred_class)
+sensitivity(test_predict, truth = angaus, estimate = .pred_class)
+specificity(test_predict, truth = angaus, estimate = .pred_class)
+```
+
+
+[When applied to the testing data, the accuracy of the model was 78%. However, the model made a lot of type I (false-negative) errors (i.e., when there were eels at the site, the model only correctly predicted that this was the case about 43% of the time)]{style="color:navy;"}
 
 ## Fit your model the evaluation data and compare performance
 
 1.  Now used your final model to predict on the other dataset (eval.data.csv)
 
+```{r}
+# load evaluation data
+eel_eval_data <- read.csv(here::here("lab", "data", "eel.eval.data.csv")) %>%
+  janitor::clean_names() %>%
+  mutate(angaus = as.factor(angaus_obs)) %>% 
+  select(-angaus_obs)
+
+# preprocess evaluation data using same recipe
+baked_eval <- bake(eel_recipe, eel_eval_data)
+
+```
+
+```{r}
+# predict evaluation data
+eval_predict <- predict(final_fit, baked_eval) %>% 
+    bind_cols(eel_test) # bind predictions column to testing data
+
+# create confusion matrix
+conf_mat(data = eval_predict, truth = angaus, estimate = .pred_class) %>% 
+  autoplot(type = "heatmap")
+
+```
+
+
+
 2.  How does your model perform on this data?
+
+```{r}
+# get accuracy, sensitivity, and specificity
+accuracy(eval_predict, truth = angaus, estimate = .pred_class)
+sensitivity(eval_predict, truth = angaus, estimate = .pred_class)
+specificity(eval_predict, truth = angaus, estimate = .pred_class)
+```
+
 
 3.  How do your results compare to those of Elith et al.?
 

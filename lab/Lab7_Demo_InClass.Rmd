@@ -1,11 +1,16 @@
 ---
 title: "Clustering Lab"
-author: "Mateo Robbins"
+author: "Linus Ghanadan"
 date: "2024-02-29"
 output: html_document
 ---
 
-```{r, echo = FALSE, eval = TRUE}
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(include = TRUE, message = FALSE, warning = FALSE)
+```
+
+
+```{r}
 library(tidyverse) 
 library(cluster) #cluster analysis
 library(factoextra) #cluster visualization
