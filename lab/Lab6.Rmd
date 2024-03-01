@@ -38,8 +38,7 @@ https://github.com/MaRo406/eds-232-machine-learning/blob/main/data
 eel_data <- read.csv(here::here("lab", "data", "eel.model.data.csv")) %>%
   janitor::clean_names() %>% 
   mutate(angaus = as.factor(angaus),
-         ds_dam = as.factor(ds_dam),
-         method = as.factor(method)) %>% 
+         ds_dam = as.factor(ds_dam)) %>% 
   select(-site)
 ```
 
@@ -66,11 +65,6 @@ cv_folds <- eel_train %>% vfold_cv(v = 10)
 ### Preprocess
 
 Create a recipe to prepare your data for the XGBoost model
-
-```{r}
-str(eel_train)
-```
-
 
 ```{r}
 # specify recipe for model preprocessing
@@ -228,7 +222,7 @@ xgboost_spec_stochastic <- boost_tree(
 
 ```{r}
 # finalize mtry range based on the number of predictors
-mtry_finalized <- finalize(mtry(), eel_train)
+mtry_finalized <- finalize(mtry(), baked_train)
 
 # create tuning grid for stochastic parameters
 stochastic_grid <- grid_latin_hypercube(
@@ -285,15 +279,21 @@ final_xgboost_model <- finalize_model(
 final_fit <- fit(
   final_xgboost_model,
   formula = angaus ~ .,
-  data = eel_train
+  data = baked_train
 )
 ```
 
 ```{r}
+# bake training data using recipe
+baked_test <- bake(eel_recipe, eel_test)
 
 # predict testing data
-test_predict <- predict(final_fit, eel_test) %>%
-  bind_cols(eel_test) # bind predictions column to testing data
+test_predict <- predict(final_fit, baked_test) %>%
+  bind_cols(baked_test) # bind predictions column to testing data
+
+# get prediction probabilities
+test_predict <- predict(final_fit, baked_test, type = "prob") %>%
+  bind_cols(test_predict) # bind predictions column to class predictions data frame
 
 # create confusion matrix
 conf_mat(data = test_predict, truth = angaus, estimate = .pred_class) %>% 
@@ -304,14 +304,15 @@ conf_mat(data = test_predict, truth = angaus, estimate = .pred_class) %>%
 1.  How well did your model perform? What types of errors did it make?
 
 ```{r}
-# get accuracy, sensitivity, and specificity
+# get accuracy, ROC AUC, sensitivity, and specificity
 accuracy(test_predict, truth = angaus, estimate = .pred_class)
+roc_auc(test_predict, truth = angaus, .pred_0)
 sensitivity(test_predict, truth = angaus, estimate = .pred_class)
 specificity(test_predict, truth = angaus, estimate = .pred_class)
 ```
 
 
-[When applied to the testing data, the accuracy of the model was 78%. However, the model made a lot of type I (false-negative) errors, with a specificity of only 43%. This means that when there were in fact eels at the site, the model only correctly predicted that this was the case about 43% of the time. Meanwhile, the sensitivity of the model is high at 90% (i.e., when there were no eels at the site, the model correctly predicted that this was the case 90% of the time).]{style="color:navy;"}
+[When applied to the testing data, the accuracy of the model was 81%. However, the model made a lot of type I (false-negative) errors, with a specificity of only 48%. This means that when there were in fact eels at the site, the model only correctly predicted that this was the case about 48% of the time. Meanwhile, the sensitivity of the model is high at 89% (i.e., when there were no eels at the site, the model correctly predicted that this was the case 89% of the time).]{style="color:navy;"}
 
 ## Fit your model the evaluation data and compare performance
 
@@ -319,17 +320,15 @@ specificity(test_predict, truth = angaus, estimate = .pred_class)
 # load evaluation data
 eval_data <- read.csv(here::here("lab", "data", "eel.eval.data.csv")) %>%
   janitor::clean_names() %>%
-  mutate(angaus = as.factor(angaus),
-         ds_dam = as.factor(ds_dam),
-         method = as.factor(method)) %>% 
+  mutate(angaus = as.factor(angaus_obs),
+         ds_dam = as.factor(ds_dam)) %>% 
   select(-angaus_obs, angaus, everything())
 
+# bake training data using recipe
+baked_eval <- bake(eel_recipe, eval_data)
+
 # fit final model to training data
-final_fit <- fit(
-  final_xgboost_model,
-  formula = angaus ~ .,
-  data = eval_data
-)
+final_fit <- fit(final_xgboost_model, formula = angaus ~ ., data = baked_eval)
 ```
 
 
@@ -338,8 +337,12 @@ final_fit <- fit(
 ```{r}
 
 # predict evaluation data
-eval_predict <- predict(final_fit, eval_data) %>% 
-  bind_cols(eval_data) # bind predictions column to testing data
+eval_predict <- predict(final_fit, baked_eval) %>% 
+  bind_cols(baked_eval) # bind predictions column to testing data
+
+# get prediction probabilities
+eval_predict <- predict(final_fit, baked_eval, type = "prob") %>%
+  bind_cols(eval_predict) # bind predictions column to class predictions data frame
 
 # create confusion matrix
 conf_mat(data = eval_predict, truth = angaus, estimate = .pred_class) %>% 
@@ -350,16 +353,19 @@ conf_mat(data = eval_predict, truth = angaus, estimate = .pred_class) %>%
 2.  How does your model perform on this data?
 
 ```{r}
-# get accuracy, sensitivity, and specificity
+# get accuracy, ROC AUC, sensitivity, and specificity
 accuracy(eval_predict, truth = angaus, estimate = .pred_class)
+roc_auc(eval_predict, truth = angaus, .pred_0)
 sensitivity(eval_predict, truth = angaus, estimate = .pred_class)
 specificity(eval_predict, truth = angaus, estimate = .pred_class)
 ```
 
-[When applied to the evaluation data, the accuracy of the model was 80%, which is slightly better than when the model was applied to the testing data. However, the specificity of the model decreases substantially to only 17% (i.e., when there were eels at the site, the model correctly predicted that this was the case 17% of the time), meaning that the model is committing even more type I errors than it was before. Meanwhile, the sensitivity of the model is extremely high at 98% (i.e., when there were no eels at the site, the model correctly predicted that this was the case 98% of the time).]{style="color:navy;"}
+[When applied to the evaluation data, the accuracy of the model was 80%, which is about the same as when the model was applied to the testing data. However, the specificity of the model decreases substantially to only 16% (i.e., when there were eels at the site, the model correctly predicted that this was the case 16% of the time), meaning that the model is committing even more type I errors than it was before. Meanwhile, the sensitivity of the model is extremely high at 98% (i.e., when there were no eels at the site, the model correctly predicted that this was the case 98% of the time).]{style="color:navy;"}
 
 
 3.  How do your results compare to those of Elith et al.?
+
+[My predictive performance results are pretty similar to those of Elith et al. When applied to data that the model hasn't seen before, we both find that the area under the receiver operating characteristic (AUC ROC) to be around 0.85. Specifically, the AUC ROC was 0.83 when I applied my model to my testing data and 0.85 when applied to the evaluation data. Comparatively, Elith et al got an AUC ROC of 0.86 when they applied their model to independent sites.]{style="color:navy;"}
 
 -   Use {vip} to compare variable importance
 
@@ -368,8 +374,8 @@ specificity(eval_predict, truth = angaus, estimate = .pred_class)
 vip(final_fit, method = "model")
 ```
 
-[My results are similar to Elith et al in that summer air temperature (seg_sum_t) was the most important predictor variable, with a relative contribution that is above 20%. In addition, for both of us, the second most important predictor variable was the proportion of area with indigenous forest (us_native), though its relative contribution percentage is more than double in my analysis. Meanwhile, one of the most significant differences is the relative contribution of maximum downstream slope (ds_max_slope) in my analysis, which is well ahead of both distance to coast (ds_dist) and the weighted average of proportional cover of bed sediment (loc_sed). For Elith et al, both of these variables were more important than maximum downstream slope. Lastly, another significant difference was the extremely low (basically zero) contribution of days per month with rain greater than 25 mm (us_rain_days) in my analysis, compared to a contribution of 6.5% in Elith et al's analysis. In Elith et al's analysis, train days were more important predictors than average temperature in catchment compared with segment (us_avg_t) and winter air temperature (seg_t_seas), while this was not the case in my analysis.]{style="color:navy;"}
+[My variable importance results are similar to Elith et al in that summer air temperature (seg_sum_t) was by far the most important predictor variable, though its relative contribution percentage is about double in my analysis. In addition, for both of us, the second most important predictor variable was the proportion of area with indigenous forest (us_native), though its relative contribution percentage is also about double in my analysis. Meanwhile, the most significant difference is the relative contribution of maximum downstream slope (ds_max_slope) in my analysis, which is well ahead of the weighted average of proportional cover of bed sediment (loc_sed). For Elith et al, the weighted average of proportional cover of bed sediment was slightly more important than maximum downstream slope.]{style="color:navy;"}
 
 -   What do your variable importance results tell you about the distribution of this eel species?
 
-My variable importance results say that summer air temperature, proportion of area with indigenous forest, maximum downstream slope, and distance to coast are the most important predictors of eel species distribution. In addition, my results say that days per month with rain greater than 25 mm, winter air temperature, 
+[My variable importance results say that summer air temperature is the most significant predictor of eel distribution, explaining about 45% of variation. Furthermore, proportion of area with indigenous forest explains about 17% of the variation in eel distribution, distance to coast explains about 16%, maximum downstream slope explains about 12%, and the weighted average of proportional cover of bed sediment explains about 7%.]{style="color:navy;"}
