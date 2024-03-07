@@ -360,7 +360,7 @@ sensitivity(eval_predict, truth = angaus, estimate = .pred_class)
 specificity(eval_predict, truth = angaus, estimate = .pred_class)
 ```
 
-[When applied to the evaluation data, the accuracy of the model was 80%, which is about the same as when the model was applied to the testing data. However, the specificity of the model decreases substantially to only 16% (i.e., when there were eels at the site, the model correctly predicted that this was the case 16% of the time), meaning that the model is committing even more type I errors than it was before. Meanwhile, the sensitivity of the model is extremely high at 98% (i.e., when there were no eels at the site, the model correctly predicted that this was the case 98% of the time).]{style="color:navy;"}
+[When applied to the evaluation data, the accuracy of the model was 82%, which is about the same as when the model was applied to the testing data. However, the specificity of the model decreases substantially to only 27% (i.e., when there were eels at the site, the model correctly predicted that this was the case 27% of the time), meaning that the model is committing even more type I errors than it was before. Meanwhile, the sensitivity of the model is extremely high at 96% (i.e., when there were no eels at the site, the model correctly predicted that this was the case 96% of the time).]{style="color:navy;"}
 
 
 3.  How do your results compare to those of Elith et al.?
@@ -378,4 +378,4 @@ vip(final_fit, method = "model")
 
 -   What do your variable importance results tell you about the distribution of this eel species?
 
-[My variable importance results say that summer air temperature is the most significant predictor of eel distribution, explaining about 45% of variation. Furthermore, proportion of area with indigenous forest explains about 17% of the variation in eel distribution, distance to coast explains about 16%, maximum downstream slope explains about 12%, and the weighted average of proportional cover of bed sediment explains about 7%.]{style="color:navy;"}
+[My variable importance results say that summer air temperature is the most significant predictor of eel distribution, explaining about 45% of variation. Furthermore, proportion of area with indigenous forest explains about 21% of the variation in eel distribution, distance to coast explains about 19%, maximum downstream slope explains about 10%, and the weighted average of proportional cover of bed sediment explains about 5%.]{style="color:navy;"}
