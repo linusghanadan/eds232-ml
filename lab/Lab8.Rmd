@@ -17,11 +17,41 @@ You task is build both an SVM and a random forest model and compare their perfor
 
 Explore the data.
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(include = TRUE, message = FALSE, warning = FALSE)
+```
+
+```{r}
+# load libraries
+library(tidymodels)
+library(tidyverse)
+```
+
+```{r}
+# set seed
+set.seed(123)
+```
+
+```{r}
+# import data
+covtype_df <- readr::read_csv(here::here("lab/data/covtype_sample.csv")) %>% 
+  janitor::clean_names() %>% 
+  mutate(covtype = as.factor(cover_type)) %>% # convert cover_type column to un-ordered factor
+  mutate(across(.cols = matches("wilderness_area|soil_type"), # convert wilderness and soil type columns to binary factor
+                .fns = factor))
+```
+
+```{r}
+# check distribution of outcome variable
+summary(covtype_df$cover_type)
+```
+
+
 -   What kinds of features are we working with?
 
--   Does anything stand out that will affect you modeling choices?
+-   Does anything stand out that will affect you modeling choices? Hint: Pay special attention to the distribution of the outcome variable across the classes.
 
-Hint: Pay special attention to the distribution of the outcome variable across the classes.
+The outcome variable is very skewed right. For this reason, its important that we normalize the cover type variable while pre-processing our models.
 
 2.  Create the recipe and carry out any necessary preprocessing. Can you use the same recipe for both models?
 
