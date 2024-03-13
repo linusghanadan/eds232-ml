@@ -146,18 +146,18 @@ final_rf_fit <- final_rf_workflow %>%
 
 ```{r}
 # predict testing data
-test_predict_rf <- predict(final_rf_fit, tracks_test) %>%
-  bind_cols(tracks_test) %>%
-  mutate(name = as.factor(name))
+test_predict_rf <- predict(final_rf_fit, covtype_test) %>%
+  bind_cols(covtype_test) %>%
+  mutate(cover_type = as.factor(cover_type))
 
  # get prediction probabilities for test
-test_predict_rf <- predict(final_rf_fit, tracks_test, type = "prob") %>%
-  bind_cols(test_predict_rf) %>%
-  mutate(name = as.factor(name))
+# test_predict_rf <- predict(final_rf_fit, tracks_test, type = "prob") %>%
+#   bind_cols(test_predict_rf) %>%
+#   mutate(name = as.factor(name))
 
 # make confusion matrix for predictions made on testing data
 conf_matrix_rf <- test_predict_rf %>%
-  conf_mat(truth = name, estimate = .pred_class) %>%
+  conf_mat(truth = cover_type, estimate = .pred_class) %>%
   autoplot(type = "heatmap") +
   ggtitle("RF") +
   theme_bw() +
