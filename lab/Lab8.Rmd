@@ -36,9 +36,10 @@ set.seed(123)
 # import data
 covtype_df <- readr::read_csv(here::here("lab/data/covtype_sample.csv")) %>% 
   janitor::clean_names() %>% 
-  mutate(covtype = as.factor(cover_type)) %>% # convert cover_type column to un-ordered factor
-  mutate(across(.cols = matches("wilderness_area|soil_type"), # convert wilderness and soil type columns to binary factor
-                .fns = factor))
+  mutate(cover_type = as.factor(cover_type)) %>% # convert cover_type column to un-ordered factor
+  mutate(across(.cols = matches("wilderness_area|soil_type"),
+                .fns = factor)) %>% # convert wilderness and soil type columns to binary factor'
+  select(-soil_type_15) # remove b/c only one factor level
 ```
 
 ```{r}
@@ -51,15 +52,119 @@ summary(covtype_df$cover_type)
 
 -   Does anything stand out that will affect you modeling choices? Hint: Pay special attention to the distribution of the outcome variable across the classes.
 
-The outcome variable is very skewed right. For this reason, its important that we normalize the cover type variable while pre-processing our models.
+[The outcome variable is very skewed right. For this reason, its important that we normalize the cover type variable while pre-processing our models.]{style="color:navy;"}
 
 2.  Create the recipe and carry out any necessary preprocessing. Can you use the same recipe for both models?
 
+```{r}
+# initial split of data (default 70/30)
+covtype_split <- initial_split(covtype_df, strata = cover_type, prop = 0.7)
+covtype_test <- testing(covtype_split)
+covtype_train <- training(covtype_split)
+```
+
+
+```{r}
+# specify recipe for model preprocessing
+covtype_recipe <- recipe(cover_type ~ ., data = covtype_train) %>%
+  step_dummy(all_nominal_predictors()) %>%
+  step_normalize(all_numeric_predictors()) %>%
+  prep() # prep recipe
+
+```
+
+
 3.  Create the folds for cross-validation.
+
+```{r}
+# create 10 folds of the training dataset for CV
+cv_folds <- covtype_train %>% vfold_cv(v = 10)
+```
+
 
 4.  Tune the models. Choose appropriate parameters and grids. If the computational costs of tuning given your strategy are prohibitive, how might you work around this?
 
+## Random forest model
+
+```{r}
+# specify RF model
+rf_spec <- rand_forest(trees = 500, mtry = tune(), min_n = tune()) %>%
+  set_engine("ranger") %>%
+  set_mode("classification")
+```
+
+```{r}
+# create a tuning grid
+rf_grid <- grid_latin_hypercube(
+  mtry(range = c(2, 4)), 
+  min_n(c(1, 10)),
+  size = 20
+)
+```
+
+```{r}
+# create workflow
+wf_rf <- workflow() %>%
+  add_recipe(covtype_recipe) %>%
+  add_model(rf_spec)
+```
+
+```{r}
+# tune the model
+rf_tune_res <- tune_grid(
+  wf_rf,
+  resamples = cv_folds,
+  grid = rf_grid
+)
+```
+
+
+```{r}
+# finalize the model
+best_rf_params <- show_best(rf_tune_res, "accuracy")
+final_rf <- finalize_model(rf_spec, best_rf_params)
+```
+
+
+
+```{r}
+# finalize the model with optimal parameters
+final_rf <- finalize_model(rf_spec, best_rf_params)
+
+# create a new workflow with finalized model
+final_rf_workflow <- workflow() %>%
+  add_recipe(covtype_recipe) %>%
+  add_model(final_rf)
+
+# fit final workflow to the training data
+final_rf_fit <- final_rf_workflow %>%
+  fit(data = covtype_train)
+```
+
 5.  Conduct final predictions for both models and compare their prediction performances and computation costs from part 4.
+
+
+```{r}
+# predict testing data
+test_predict_rf <- predict(final_rf_fit, tracks_test) %>%
+  bind_cols(tracks_test) %>%
+  mutate(name = as.factor(name))
+
+ # get prediction probabilities for test
+test_predict_rf <- predict(final_rf_fit, tracks_test, type = "prob") %>%
+  bind_cols(test_predict_rf) %>%
+  mutate(name = as.factor(name))
+
+# make confusion matrix for predictions made on testing data
+conf_matrix_rf <- test_predict_rf %>%
+  conf_mat(truth = name, estimate = .pred_class) %>%
+  autoplot(type = "heatmap") +
+  ggtitle("RF") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1),
+        legend.position = "none")
+```
+
 
 -   Which type of model do you think is better for this task?
 -   Why do you speculate this is the case?
