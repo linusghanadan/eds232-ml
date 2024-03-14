@@ -29,6 +29,12 @@ library(kernlab)
 ```
 
 ```{r}
+# turn of scientific notation
+options(scipen = 999)
+```
+
+
+```{r}
 # set seed
 set.seed(123)
 ```
@@ -45,6 +51,19 @@ covtype_df <- readr::read_csv(here::here("lab/data/covtype_sample.csv")) %>%
 # check distribution of outcome variable
 summary(covtype_df$cover_type)
 ```
+
+```{r}
+# inspect mean and variance of different columns
+sapply(covtype_df, mean, na.rm = TRUE)
+sapply(covtype_df, function(x) if(is.numeric(x)) var(x, na.rm = TRUE) else NA)
+```
+
+```{r}
+# remove least common soil types (so I can render faster!)
+covtype_df <- covtype_df %>% 
+  select(-soil_type_37, -soil_type_36, -soil_type_35, -soil_type_34, -soil_type_28, -soil_type_27, -soil_type_26, -soil_type_25, -soil_type_21, -soil_type_19, -soil_type_18, -soil_type_17, -soil_type_16, -soil_type_14, -soil_type_9, -soil_type_8, -soil_type_7, -soil_type_5, -soil_type_3, -soil_type_1)
+```
+
 
 
 -   What kinds of features are we working with?
@@ -97,7 +116,7 @@ cv_folds <- covtype_train %>% vfold_cv(v = 10)
 
 4.  Tune the models. Choose appropriate parameters and grids. If the computational costs of tuning given your strategy are prohibitive, how might you work around this?
 
-[If the computational costs of tuning are prohibitive, I would work around this by removing the features with the lowest variance, as these would be the features that are most likely to be the least important for predicting the class of the outcome variable.]{style="color:navy;"}
+[If the computational costs of tuning are prohibitive, my first work around would be to remove the soil type columns that are least common in the data. Another work around could be to remove the numeric features with the lowest variance, as these would be the features that are most likely to be the least important for predicting the class of the outcome variable, though this is not necessarily true all the time.]{style="color:navy;"}
 
 ## Random forest model tuning
 
