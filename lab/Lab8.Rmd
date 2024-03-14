@@ -37,14 +37,12 @@ set.seed(123)
 covtype_df <- readr::read_csv(here::here("lab/data/covtype_sample.csv")) %>% 
   janitor::clean_names() %>% 
   mutate(cover_type = as.factor(cover_type)) %>% # convert cover_type column to un-ordered factor
-  mutate(across(.cols = matches("wilderness_area|soil_type"),
-                .fns = factor)) %>% # convert wilderness and soil type columns to binary factor'
   select(-soil_type_15) # remove b/c only one factor level
 ```
 
 ```{r}
 # check distribution of outcome variable
-summary(covtype_df$cover_type)
+summary(covtype_df$wilderness_area_rawah)
 ```
 
 
@@ -52,7 +50,7 @@ summary(covtype_df$cover_type)
 
 -   Does anything stand out that will affect you modeling choices? Hint: Pay special attention to the distribution of the outcome variable across the classes.
 
-[The outcome variable is very skewed right. For this reason, its important that we normalize the cover type variable while pre-processing our models.]{style="color:navy;"}
+[The outcome variable is very skewed right. For this reason, its important that we normalize the outcome variable by using a classification method]{style="color:navy;"}
 
 2.  Create the recipe and carry out any necessary preprocessing. Can you use the same recipe for both models?
 
@@ -67,7 +65,7 @@ covtype_train <- training(covtype_split)
 ```{r}
 # specify recipe for model preprocessing
 covtype_recipe <- recipe(cover_type ~ ., data = covtype_train) %>%
-  step_dummy(all_nominal_predictors()) %>%
+  step_dummy(all_nominal_predictors(), -all_outcomes()) %>%
   step_normalize(all_numeric_predictors()) %>%
   prep() # prep recipe
 
@@ -121,7 +119,7 @@ rf_tune_res <- tune_grid(
 
 ```{r}
 # finalize the model
-best_rf_params <- show_best(rf_tune_res, "accuracy")
+best_rf_params <- select_best(rf_tune_res, "accuracy")
 final_rf <- finalize_model(rf_spec, best_rf_params)
 ```
 
@@ -156,13 +154,18 @@ test_predict_rf <- predict(final_rf_fit, covtype_test) %>%
 #   mutate(name = as.factor(name))
 
 # make confusion matrix for predictions made on testing data
-conf_matrix_rf <- test_predict_rf %>%
+test_predict_rf %>%
   conf_mat(truth = cover_type, estimate = .pred_class) %>%
   autoplot(type = "heatmap") +
   ggtitle("RF") +
   theme_bw() +
-  theme(axis.text.x = element_text(angle = 30, hjust = 1),
-        legend.position = "none")
+  theme(legend.position = "none")
+```
+
+```{r}
+# store error metrics of testing data predictions
+accuracy_rf <- accuracy(test_predict_rf, truth = cover_type, estimate = .pred_class)
+#roc_auc_rf <- roc_auc(test_predict_rf, truth = name, .pred_linus)
 ```
 
 
