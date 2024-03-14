@@ -164,6 +164,10 @@ svm_linear_wf <- workflow() %>%
   add_formula(cover_type ~ .)
 
 param_grid <- grid_regular(cost(), levels = 10)
+```
+
+
+```{r}
 
 tune_results <- tune_grid(svm_linear_wf,
                           resamples = cv_folds,
