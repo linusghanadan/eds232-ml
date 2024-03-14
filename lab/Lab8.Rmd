@@ -209,6 +209,34 @@ accuracy_rf <- accuracy(test_predict_rf, truth = cover_type, estimate = .pred_cl
 #roc_auc_rf <- roc_auc(test_predict_rf, truth = name, .pred_linus)
 ```
 
+## SVM linear
+
+```{r}
+augment(svm_linear_fit, new_data = sim_data_test) %>% 
+  conf_mat(truth = y, estimate = .pred_class)
+```
+
+## SVM non-linear
+
+```{r}
+svm_rbf_spec <- svm_rbf() %>%  # use radial basis
+  set_mode("classification") %>% 
+  set_engine("kernlab")
+```
+
+```{r}
+#Fit the new specification
+svm_rbf_fit <- svm_rbf_spec %>% 
+  fit(cover_type ~ ., data = covtype_train)
+```
+
+```{r}
+#Examine model performance via confustion matrix
+augment(svm_rbf_fit, new_data = covtype_test) %>% 
+  accuracy(truth = cover_type, estimate = .pred_class)
+```
+
+
 
 -   Which type of model do you think is better for this task?
 -   Why do you speculate this is the case?
