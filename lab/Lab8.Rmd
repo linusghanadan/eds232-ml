@@ -38,22 +38,49 @@ set.seed(123)
 covtype_df <- readr::read_csv(here::here("lab/data/covtype_sample.csv")) %>% 
   janitor::clean_names() %>% 
   mutate(cover_type = as.factor(cover_type)) %>% # convert cover_type column to un-ordered factor
-  select(-soil_type_15) # remove b/c only one factor level
+  select(-soil_type_15) # remove b/c only one factor level for all observations
 ```
 
 ```{r}
 # check distribution of outcome variable
-summary(covtype_df$wilderness_area_rawah)
+summary(covtype_df$cover_type)
 ```
 
 
 -   What kinds of features are we working with?
 
+[We are working with 54 features. 39 of these features are binary variables for soil types, each indicating whether the land or does not have the specific soil type. 10 of these features are numeric variables, specifying values for things such as elevation and slope of the land. Lastley, the 3 remaining features are binary variables specifying whether the land is part of a specific wilderness area (Neota, Comanche, or Poudre).]{style="color:navy;"}
+
 -   Does anything stand out that will affect you modeling choices? Hint: Pay special attention to the distribution of the outcome variable across the classes.
 
-[The outcome variable is very skewed right. For this reason, its important that we normalize the outcome variable by using a classification method]{style="color:navy;"}
+[For our outcome variable (land cover type), there are significantly more observatons with cover types 1 and 2 than for any of the other classes. Specifically, there are 3696 with type 1, 4870 with type 2, and only a combined 1434 with types 3 through 7. Due to this very uneven distribution, it is important that we normalize the outcome variable, which automatically occurs when we use classification where there is more than one class. In addition, this also suggests that a SVM model will work best, as these models are often very effective at multiclass classification when there are many minority classes.]{style="color:navy;"}
 
 2.  Create the recipe and carry out any necessary preprocessing. Can you use the same recipe for both models?
+
+[No, we cannot use the same recipe for both models. The RF model requires that we prep the recipe, while the SVM linear model requires that we do not. Meanwhile, there is no need to use a recipe for the SVM nonlinear model.]{style="color:navy;"}
+
+## RF preprocessing
+
+```{r}
+# specify recipe for model preprocessing
+covtype_recipe <- recipe(cover_type ~ ., data = covtype_df) %>%
+  step_dummy(all_nominal_predictors(), -all_outcomes()) %>%
+  step_normalize(all_numeric_predictors()) %>%
+  prep() # prep recipe
+
+```
+
+## Linear SVM preprocessing
+
+```{r}
+# specify recipe for model preprocessing
+svm_recipe <- recipe(cover_type ~ ., data = covtype_df) %>%
+  step_dummy(all_nominal_predictors()) %>%
+  step_center(all_numeric_predictors()) %>% # center to mean of 0
+  step_scale(all_numeric_predictors()) # scale to sd of 1
+```
+
+3.  Create the folds for cross-validation.
 
 ```{r}
 # initial split of data (default 70/30)
@@ -61,26 +88,6 @@ covtype_split <- initial_split(covtype_df, strata = cover_type, prop = 0.7)
 covtype_test <- testing(covtype_split)
 covtype_train <- training(covtype_split)
 ```
-
-
-```{r}
-# specify recipe for model preprocessing
-covtype_recipe <- recipe(cover_type ~ ., data = covtype_train) %>%
-  step_dummy(all_nominal_predictors(), -all_outcomes()) %>%
-  step_normalize(all_numeric_predictors()) %>%
-  prep() # prep recipe
-
-```
-
-```{r}
-#specify a recipe where we center to mean of 0 and scale to sd of 1
-svm_recipe <- recipe(cover_type ~ ., data = covtype_train) %>%
-  step_dummy(all_nominal_predictors()) %>%
-  step_center(all_numeric_predictors()) %>% 
-  step_scale(all_numeric_predictors())
-```
-
-3.  Create the folds for cross-validation.
 
 ```{r}
 # create 10 folds of the training dataset for CV
@@ -90,25 +97,23 @@ cv_folds <- covtype_train %>% vfold_cv(v = 10)
 
 4.  Tune the models. Choose appropriate parameters and grids. If the computational costs of tuning given your strategy are prohibitive, how might you work around this?
 
-## Random forest model
+[If the computational costs of tuning are prohibitive, I would work around this by removing the features with the lowest variance, as these would be the features that are most likely to be the least important for predicting the class of the outcome variable.]{style="color:navy;"}
+
+## Random forest model tuning
 
 ```{r}
 # specify RF model
 rf_spec <- rand_forest(trees = 500, mtry = tune(), min_n = tune()) %>%
   set_engine("ranger") %>%
   set_mode("classification")
-```
 
-```{r}
 # create a tuning grid
 rf_grid <- grid_latin_hypercube(
   mtry(range = c(2, 4)), 
   min_n(c(1, 10)),
   size = 20
 )
-```
 
-```{r}
 # create workflow
 wf_rf <- workflow() %>%
   add_recipe(covtype_recipe) %>%
@@ -124,16 +129,10 @@ rf_tune_res <- tune_grid(
 )
 ```
 
-
 ```{r}
-# finalize the model
+# select optimal parameters
 best_rf_params <- select_best(rf_tune_res, "accuracy")
-final_rf <- finalize_model(rf_spec, best_rf_params)
-```
 
-
-
-```{r}
 # finalize the model with optimal parameters
 final_rf <- finalize_model(rf_spec, best_rf_params)
 
@@ -147,45 +146,62 @@ final_rf_fit <- final_rf_workflow %>%
   fit(data = covtype_train)
 ```
 
-## SVM linear
+## Linear SVM model tuning
 
 ```{r}
-#Create linear SVM model specification
+# create linear SVM model specification
 svm_linear_spec <- svm_poly(degree = 1, cost = tune()) %>% 
   set_mode("classification") %>% 
   set_engine("kernlab")
-```
 
-```{r}
-#tune our hyperparameter values
+# create workflow
 svm_linear_wf <- workflow() %>%
   add_model(svm_linear_spec %>%
             set_args(cost = tune())) %>%
   add_formula(cover_type ~ .)
 
+# create grid of cost values to tune with
 param_grid <- grid_regular(cost(), levels = 10)
 ```
 
 
 ```{r}
-
+# tune for cost
 tune_results <- tune_grid(svm_linear_wf,
                           resamples = cv_folds,
                           grid = param_grid)
 ```
 
 ```{r}
+# select optimal cost
 best_cost <- select_best(tune_results, metric = "accuracy")
 
+# create finalized workflow with optimal cost
 svm_linear_final <- finalize_workflow(svm_linear_wf, best_cost)
 
+# fit finalized workflow to the training data
 svm_linear_fit <- svm_linear_final %>% fit(covtype_train)
 
 ```
 
+## Nonlinear SVM model tuning
+
+```{r}
+# create non-linear SVM model specification using radial basis function
+svm_rbf_spec <- svm_rbf() %>%  # use radial basis
+  set_mode("classification") %>% 
+  set_engine("kernlab")
+```
+
+```{r}
+# fit the specified model to the training data
+svm_rbf_fit <- svm_rbf_spec %>% 
+  fit(cover_type ~ ., data = covtype_train)
+```
 
 5.  Conduct final predictions for both models and compare their prediction performances and computation costs from part 4.
 
+## Random forest model predictions
 
 ```{r}
 # predict testing data
@@ -193,10 +209,14 @@ test_predict_rf <- predict(final_rf_fit, covtype_test) %>%
   bind_cols(covtype_test) %>%
   mutate(cover_type = as.factor(cover_type))
 
- # get prediction probabilities for test
-# test_predict_rf <- predict(final_rf_fit, tracks_test, type = "prob") %>%
-#   bind_cols(test_predict_rf) %>%
-#   mutate(name = as.factor(name))
+# calculate accuracy
+accuracy(test_predict_rf, truth = cover_type, estimate = .pred_class)
+
+# calculate sensitivity
+sensitivity(test_predict_rf, truth = cover_type, estimate = .pred_class)
+
+# calculate specificity
+specificity(test_predict_rf, truth = cover_type, estimate = .pred_class)
 
 # make confusion matrix for predictions made on testing data
 test_predict_rf %>%
@@ -207,40 +227,54 @@ test_predict_rf %>%
   theme(legend.position = "none")
 ```
 
-```{r}
-# store error metrics of testing data predictions
-accuracy_rf <- accuracy(test_predict_rf, truth = cover_type, estimate = .pred_class)
-#roc_auc_rf <- roc_auc(test_predict_rf, truth = name, .pred_linus)
-```
-
-## SVM linear
+## Linear SVM model predictions
 
 ```{r}
-augment(svm_linear_fit, new_data = sim_data_test) %>% 
+# predict testing data and calculate accuracy
+augment(svm_linear_fit, new_data = covtype_test) %>% 
+  accuracy(truth = cover_type, estimate = .pred_class)
+
+# predict testing data and calculate sensitivity
+augment(svm_linear_fit, new_data = covtype_test) %>% 
+  sensitivity(truth = cover_type, estimate = .pred_class)
+
+# predict testing data and calculate specificity
+augment(svm_linear_fit, new_data = covtype_test) %>% 
+  specificity(truth = cover_type, estimate = .pred_class)
+
+# predict testing data and make confusion matrix
+augment(svm_linear_fit, new_data = covtype_test) %>% 
   conf_mat(truth = y, estimate = .pred_class)
 ```
 
-## SVM non-linear
+## Non-linear SVM model predictions
 
 ```{r}
-svm_rbf_spec <- svm_rbf() %>%  # use radial basis
-  set_mode("classification") %>% 
-  set_engine("kernlab")
-```
-
-```{r}
-#Fit the new specification
-svm_rbf_fit <- svm_rbf_spec %>% 
-  fit(cover_type ~ ., data = covtype_train)
-```
-
-```{r}
-#Examine model performance via confustion matrix
+# predict testing data and calculate accuracy
 augment(svm_rbf_fit, new_data = covtype_test) %>% 
   accuracy(truth = cover_type, estimate = .pred_class)
+
+# predict testing data and calculate sensitivity
+augment(svm_rbf_fit, new_data = covtype_test) %>% 
+  sensitivity(truth = cover_type, estimate = .pred_class)
+
+# predict testing data and calculate specificity
+augment(svm_rbf_fit, new_data = covtype_test) %>% 
+  specificity(truth = cover_type, estimate = .pred_class)
+
+# predict testing data and make confusion matrix
+augment(svm_rbf_fit, new_data = covtype_test) %>% 
+  conf_mat(truth = cover_type, estimate = .pred_class)
 ```
 
 
 
 -   Which type of model do you think is better for this task?
+
+[All three models had accuracy percentage around 72 to 73% and a specificity (true negative rate) of about 0.93. However, there were some differences when it came to sensitivity (true positive rate). Sensitivity was highest for the linear SVM model, at about 0.48, compared to 0.44 for the nonlinear SVM and 0.38 for the random forest model. Based on these results, it would appear that the linear SVM was the best for this task, since it had the highest sensitivity of the three models (all of which performed very similarly in terms of accuracy and specificity). In terms of computational burden, the linear SVM definitely had the highest computational burden, as tuning the cost hyperparameter took close to an hour. The code for the nonlinear SVM and random forest models ran pretty quickley though.]{style="color:navy;"}
+
 -   Why do you speculate this is the case?
+
+[It is possible that the linear SVM model outperformed the nonlinear SVM model on the testing data because there were underlying linear relationships between the outcome variable (land cover type) and the predictor variables. If this were the case, it would make sense that the linear SVM model would perform better, as the non-linear SVM model would likely overfit the training data. As for why both SVM models had higher sensitivity than the random forest model, I would speculate that this has something to do with the class imbalance that was present in the data, as the need to differentiate between different minority classes might make it so a optimally-tuned SVM model works better than relying on decision trees in the random forest model.]{style="color:navy;"}
+
+
