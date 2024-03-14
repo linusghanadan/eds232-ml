@@ -157,10 +157,10 @@ svm_linear_spec <- svm_poly(degree = 1, cost = tune()) %>%
 ```
 
 ```{r}
-# tune our hyperparameter values
-svm_linear_wf <- workflow() %>% 
-  add_model(svm_linear_spec %>% 
-            set_args(cost_tune())) %>% 
+#tune our hyperparameter values
+svm_linear_wf <- workflow() %>%
+  add_model(svm_linear_spec %>%
+            set_args(cost = tune())) %>%
   add_formula(cover_type ~ .)
 
 param_grid <- grid_regular(cost(), levels = 10)
