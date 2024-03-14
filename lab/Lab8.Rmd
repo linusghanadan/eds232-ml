@@ -25,6 +25,7 @@ knitr::opts_chunk$set(include = TRUE, message = FALSE, warning = FALSE)
 # load libraries
 library(tidymodels)
 library(tidyverse)
+library(kernlab)
 ```
 
 ```{r}
@@ -71,6 +72,13 @@ covtype_recipe <- recipe(cover_type ~ ., data = covtype_train) %>%
 
 ```
 
+```{r}
+#specify a recipe where we center to mean of 0 and scale to sd of 1
+svm_recipe <- recipe(cover_type ~ ., data = covtype_train) %>%
+  step_dummy(all_nominal_predictors()) %>%
+  step_center(all_numeric_predictors()) %>% 
+  step_scale(all_numeric_predictors())
+```
 
 3.  Create the folds for cross-validation.
 
@@ -138,6 +146,39 @@ final_rf_workflow <- workflow() %>%
 final_rf_fit <- final_rf_workflow %>%
   fit(data = covtype_train)
 ```
+
+## SVM linear
+
+```{r}
+#Create linear SVM model specification
+svm_linear_spec <- svm_poly(degree = 1, cost = tune()) %>% 
+  set_mode("classification") %>% 
+  set_engine("kernlab")
+```
+
+```{r}
+# tune our hyperparameter values
+svm_linear_wf <- workflow() %>% 
+  add_model(svm_linear_spec %>% 
+            set_args(cost_tune())) %>% 
+  add_formula(cover_type ~ .)
+
+param_grid <- grid_regular(cost(), levels = 10)
+
+tune_results <- tune_grid(svm_linear_wf,
+                          resamples = cv_folds,
+                          grid = param_grid)
+```
+
+```{r}
+best_cost <- select_best(tune_results, metric = "accuracy")
+
+svm_linear_final <- finalize_workflow(svm_linear_wf, best_cost)
+
+svm_linear_fit <- svm_linear_final %>% fit(covtype_train)
+
+```
+
 
 5.  Conduct final predictions for both models and compare their prediction performances and computation costs from part 4.
 
