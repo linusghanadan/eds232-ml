@@ -67,7 +67,7 @@ Outcome variable, 'dic', looks to have a bimodal distribution, so we will normal
 ## Preprocess
 
 ```{r}
-# remove 'id' column
+# remove 'id' and 'x13' columns (for reasons specified above)
 train_df <- train_df %>%
   select(-id, -x13)
 ```
@@ -89,8 +89,8 @@ model_rec <- recipe(dic ~ ., data = train_df) %>%
 ```{r}
 # specify model for tuning learning rate
 lr_spec <- boost_tree(mode = "regression",
-                           engine = "xgboost",
-                           learn_rate = tune())
+                      engine = "xgboost",
+                      learn_rate = tune())
 ```
 
 ```{r}
@@ -127,10 +127,9 @@ tree_spec <- boost_tree(learn_rate = best_lr$learn_rate, # use optimized learnin
                         trees = 3000, # set number of trees to 3000
                         tree_depth = tune(), # tune maximum tree depth
                         min_n = tune(), # tune minimum n for a terminal node (minimum number of data points in a node that is required for the node to be split further)
-                        loss_reduction = tune(), # tune loss reduction (number of iterations without improvement before stopping)
+                        loss_reduction = tune(), # tune loss reduction (minimum loss required for further splits)
                         mode = "regression",
-                        engine = "xgboost"
-)
+                        engine = "xgboost")
 
 ```
 
@@ -169,7 +168,7 @@ stochastic_spec <- boost_tree(learn_rate = best_lr$learn_rate, # use optimized l
                               trees = 3000, # set number of trees to 3000
                               tree_depth = best_tree$tree_depth, # use optimized maximum tree depth
                               min_n = best_tree$min_n, # use optimized minimum n for a terminal node (minimum number of data points in a node that is required for the node to be split further)
-                              loss_reduction = best_tree$loss_reduction, # use optimized loss reduction (number of iterations without improvement before stopping)
+                              loss_reduction = best_tree$loss_reduction, # use optimized loss reduction (minimum loss required for further splits)
                               mtry = tune(), # tune mtry (number of randomly selected features that will be considered at each split)
                               sample_size = tune(), # tune sample size (amount of randomly selected data exposed to the fitting routine when conducting stochastic gradient descent at each split)
                               mode = "regression",
@@ -206,6 +205,35 @@ stochastic_tune <- tune_grid(stochastic_wf,
 ```{r}
 # store parameters of best model based on RMSE
 best_stochastic <- select_best(stochastic_tune, "rmse")
+```
+
+## Finalize workflow
+
+```{r}
+# specify final model with optimized parameters
+final_model <- finalize_model(stochastic_spec,
+                              best_stochastic)
+```
+
+```{r}
+# fit final model to training data
+final_fit <- fit(final_model,
+                 formula = dir ~ .,
+                 data = train_df)
+```
+
+## Predict DIC in testing data set
+
+```{r}
+# import test data
+test_df <- readr::read_csv(here::here("lab/data/test.csv")) %>% 
+  janitor::clean_names() %>% 
+  select(-id) # note: no need to remove 'x13' as we did with training data b/c the column is not included in testing data CSV
+```
+
+```{r}
+# predict testing data
+test_predict_df <- predict(final_fit, test_df)
 ```
 
 
