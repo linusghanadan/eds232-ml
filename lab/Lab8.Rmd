@@ -263,7 +263,7 @@ augment(svm_linear_fit, new_data = covtype_test) %>%
 
 # predict testing data and make confusion matrix
 augment(svm_linear_fit, new_data = covtype_test) %>% 
-  conf_mat(truth = y, estimate = .pred_class)
+  conf_mat(truth = cover_type, estimate = .pred_class)
 ```
 
 ## Non-linear SVM model predictions

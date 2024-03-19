@@ -1,0 +1,212 @@
+---
+title: "Kaggle Lab"
+author: "Linus Ghanadan"
+date: "2024-03-18"
+output: html_document
+---
+
+## Background
+
+You will use the data contained in the train.csv file to train a model that will predict **dissolved inorganic carbon (DIC)** content in the water samples.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(include = TRUE, message = FALSE, warning = FALSE)
+```
+
+## Setup
+
+```{r}
+# load libraries
+library(tidymodels)
+library(tidyverse)
+```
+
+```{r}
+# turn off scientific notation
+options(scipen = 999)
+```
+
+```{r}
+# set seed
+set.seed(123)
+```
+
+## Import data
+
+```{r}
+# import data
+train_df <- readr::read_csv(here::here("lab/data/train.csv")) %>% 
+  janitor::clean_names()
+
+```
+
+## Data exploration
+
+```{r}
+# inspect columns
+glimpse(train_df)
+```
+
+Will remove 'id' column. We see one predictor, 'x13', is logical, which we will further inspect.
+
+```{r}
+# check if there is any variation in 'x13' column values
+all(is.na(train_df$x13))
+```
+
+All values in the 'x13' column are NA, so we will simply remove this column.
+
+```{r}
+# check distribution of outcome variable
+ggplot(train_df, aes(x = dic)) +
+  geom_histogram()
+```
+
+Outcome variable, 'dic', looks to have a bimodal distribution, so we will normalize this in our recipe.
+
+## Preprocess
+
+```{r}
+# remove 'id' column
+train_df <- train_df %>%
+  select(-id, -x13)
+```
+
+```{r}
+# create 10 folds of the training dataset for CV
+cv_folds <- train_df %>% vfold_cv(v = 10)
+```
+
+```{r}
+# specify recipe for model preprocessing
+model_rec <- recipe(dic ~ ., data = train_df) %>%
+  step_normalize(all_numeric()) %>% # normalize numeric outcome variable as well b/c of biomodal distribution
+  prep() # prep recipe
+```
+
+## Tune learning rate
+
+```{r}
+# specify model for tuning learning rate
+lr_spec <- boost_tree(mode = "regression",
+                           engine = "xgboost",
+                           learn_rate = tune())
+```
+
+```{r}
+# create tuning grid for learning rate
+lr_grid <- expand.grid(learn_rate = seq(0.0001, 0.3, length.out = 30))
+```
+
+```{r}
+# create workflow for tuning learning rate
+lr_wf <- workflow() %>%
+  add_model(lr_spec) %>%
+  add_recipe(model_rec)
+```
+
+```{r}
+# tune the model for optimal learning rate
+lr_tune <- tune_grid(lr_wf,
+                     resamples = cv_folds,
+                     grid = lr_grid)
+```
+
+```{r}
+# store optimized learning rate based on RMSE
+best_lr <- select_best(lr_tune, 'rmse')
+best_lr$learn_rate
+```
+
+
+## Tune tree parameters
+
+```{r}
+# specify model to tune tree-based parameters
+tree_spec <- boost_tree(learn_rate = best_lr$learn_rate, # use optimized learning rate from previous step
+                        trees = 3000, # set number of trees to 3000
+                        tree_depth = tune(), # tune maximum tree depth
+                        min_n = tune(), # tune minimum n for a terminal node (minimum number of data points in a node that is required for the node to be split further)
+                        loss_reduction = tune(), # tune loss reduction (number of iterations without improvement before stopping)
+                        mode = "regression",
+                        engine = "xgboost"
+)
+
+```
+
+```{r}
+# create tuning grid for tree-based parameters
+tree_grid <- grid_latin_hypercube(tree_depth(),
+                                  min_n(),
+                                  loss_reduction(),
+                                  size = 10)
+```
+
+```{r}
+# create workflow for tuning tree-based parameters
+tree_wf <- workflow() %>%
+  add_model(tree_spec) %>%
+  add_recipe(model_rec)
+```
+
+```{r}
+# tune tree-based parameters
+tree_tune <- tune_grid(tree_wf,
+                       resamples = cv_folds,
+                       grid = tree_grid)
+```
+
+```{r}
+# store tree parameters of best model based on RMSE
+best_tree <- select_best(tree_tune, "rmse")
+```
+
+## Tune stochastic parameters
+
+```{r}
+# specify model to tune based on stochastic parameters
+stochastic_spec <- boost_tree(learn_rate = best_lr$learn_rate, # use optimized learning rate
+                              trees = 3000, # set number of trees to 3000
+                              tree_depth = best_tree$tree_depth, # use optimized maximum tree depth
+                              min_n = best_tree$min_n, # use optimized minimum n for a terminal node (minimum number of data points in a node that is required for the node to be split further)
+                              loss_reduction = best_tree$loss_reduction, # use optimized loss reduction (number of iterations without improvement before stopping)
+                              mtry = tune(), # tune mtry (number of randomly selected features that will be considered at each split)
+                              sample_size = tune(), # tune sample size (amount of randomly selected data exposed to the fitting routine when conducting stochastic gradient descent at each split)
+                              mode = "regression",
+                              engine = "xgboost"
+)
+```
+
+```{r}
+# finalize mtry range based on the number of predictors
+mtry_finalized <- finalize(mtry(), train_df)
+```
+
+```{r}
+# create tuning grid for stochastic parameters
+stochastic_grid <- grid_latin_hypercube(mtry_finalized,
+                                        sample_size = sample_prop(),
+                                        size = 10)
+```
+
+```{r}
+# create workflow for tuning stochastic parameters
+stochastic_wf <- workflow() %>%
+  add_model(stochastic_spec) %>%
+  add_recipe(model_rec)
+```
+
+```{r}
+# tune stochastic parameters
+stochastic_tune <- tune_grid(stochastic_wf,
+                             resamples = cv_folds,
+                             grid = stochastic_grid)
+```
+
+```{r}
+# store parameters of best model based on RMSE
+best_stochastic <- select_best(stochastic_tune, "rmse")
+```
+
+
+
