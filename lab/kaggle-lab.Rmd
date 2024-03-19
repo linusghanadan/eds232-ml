@@ -218,7 +218,7 @@ final_model <- finalize_model(stochastic_spec,
 ```{r}
 # fit final model to training data
 final_fit <- fit(final_model,
-                 formula = dir ~ .,
+                 formula = dic ~ .,
                  data = train_df)
 ```
 
@@ -228,12 +228,32 @@ final_fit <- fit(final_model,
 # import test data
 test_df <- readr::read_csv(here::here("lab/data/test.csv")) %>% 
   janitor::clean_names() %>% 
-  select(-id) # note: no need to remove 'x13' as we did with training data b/c the column is not included in testing data CSV
+  select(-id) %>%  # note: no need to remove 'x13' as we did with training data b/c the column is not included in testing data CSV
+  mutate(ta1_x = ta1) # rename this column to match training data
 ```
 
 ```{r}
 # predict testing data
 test_predict_df <- predict(final_fit, test_df)
+```
+
+## Format for kaggle contest submission
+
+```{r}
+# import sample submission data
+sample_submission_df <- readr::read_csv(here::here("lab/data/sample_submission.csv")) %>% 
+  janitor::clean_names()
+```
+
+```{r}
+# replace prediction values in sample submission with my predictions
+linus_submission <- sample_submission_df %>% 
+  mutate(dic = test_predict_df$.pred)
+```
+
+```{r}
+# generate my submission CSV
+write.csv(linus_submission, "linus_submission.csv", row.names = FALSE)
 ```
 
 
